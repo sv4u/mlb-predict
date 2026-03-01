@@ -1,4 +1,0 @@
-# file: /Users/sasank.vishnubhatla/Documents/personal-dev/mlb-winprob/src/winprob/crosswalk/build.py
-# hypothesis_version: 6.151.9
-
-[0.0, 0.9, 1.0, 100.0, '+00:00', 'Int64', 'Z', 'ambiguous', 'away_mlb_id', 'away_retro', 'coerce', 'date', 'dh_game_num', 'game_date_utc', 'game_num', 'game_number', 'game_pk', 'home_mlb_id', 'home_retro', 'home_team', 'left', 'match_confidence', 'matched', 'missing', 'mlb_game_pk', 'multiple_candidates', 'no_schedule_match', 'notes', 'status', 'unique', 'venue_id', 'visiting_team']

@@ -1,4 +1,0 @@
-# file: /Users/sasank.vishnubhatla/Documents/personal-dev/mlb-winprob/src/winprob/mlbapi/teams.py
-# hypothesis_version: 6.151.9
-
-['abbrev', 'abbreviation', 'id', 'mlb_team_id', 'name', 'season', 'sportId', 'teams']

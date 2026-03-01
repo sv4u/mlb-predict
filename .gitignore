@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+*.egg
+dist/
+build/
+wheels/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv / pip
+.uv/
+
+# Pytest / coverage
+.pytest_cache/
+.hypothesis/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# Mypy / ruff caches
+.mypy_cache/
+.ruff_cache/
+
+# Data — raw and processed artifacts are never committed
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Logs and summaries written at runtime
+*.log
+ingest_summary.json
+ingest_failures.parquet
+ingest_schedule_summary.json
+ingest_gamelogs_summary.json
+crosswalk_seasons_below_threshold.csv
