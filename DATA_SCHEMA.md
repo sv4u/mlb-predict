@@ -200,41 +200,172 @@ Coverage invariants:
 - Minimum required: **99.0% matched**.
 - Any season below threshold MUST be flagged in `crosswalk_seasons_below_threshold.csv`.
 
-## 3.5 Prediction snapshots (planned contract)
+## 3.5 Pitcher stats
+
+Paths:
+
+- `data/processed/pitcher_stats/pitchers_<season>.parquet`
+- `data/processed/pitcher_stats/ingest_pitcher_stats_summary.json`
+
+Schema:
+
+| Column | Type | Notes |
+|---|---|---|
+| `player_id` | int64 | MLB Stats API player ID |
+| `player_name` | string | Full name |
+| `season` | int64 | Season |
+| `era` | float64 | Earned Run Average |
+| `k9` | float64 | Strikeouts per 9 innings |
+| `bb9` | float64 | Walks per 9 innings |
+| `fip_raw` | float64 | Raw FIP (before park adjustment) |
+| `whip` | float64 | Walks + Hits per Inning Pitched |
+| `ip` | float64 | Innings pitched |
+| `games_started` | int64 | Games started |
+
+Invariants:
+
+- One row per pitcher-season; only starters with ≥1 GS are included.
+
+## 3.6 FanGraphs team metrics
+
+Paths:
+
+- `data/processed/fangraphs/fangraphs_<season>.parquet`
+- `data/processed/fangraphs/summary.json`
+
+Schema:
+
+| Column | Type | Notes |
+|---|---|---|
+| `team_fg` | string | FanGraphs team abbreviation |
+| `season` | int64 | Season |
+| `bat_woba` | float64 | Team weighted on-base average |
+| `bat_iso` | float64 | Isolated power |
+| `bat_babip` | float64 | Batting average on balls in play |
+| `bat_hard_pct` | float64 | Hard Hit % |
+| `bat_barrel_pct` | float64 | Barrel % |
+| `bat_xwoba` | float64 | Expected wOBA |
+| `pit_fip` | float64 | Fielding Independent Pitching |
+| `pit_xfip` | float64 | Expected FIP |
+| `pit_k_pct` | float64 | Team strikeout % |
+| `pit_bb_pct` | float64 | Team walk % |
+| `pit_hr_fb` | float64 | Home run / fly ball % |
+| `pit_whip` | float64 | Team WHIP |
+
+Invariants:
+
+- One row per team-season; available from 2002 onward.
+
+## 3.7 Features (66-feature matrix)
+
+Paths:
+
+- `data/processed/features/features_<season>.parquet`
+- `data/processed/features/features_2026.parquet` (pre-season; `home_win = NaN`)
+- `data/processed/features/build_features_summary.json`
+
+Schema:
+
+| Column | Type | Notes |
+|---|---|---|
+| `game_pk` | int64 | Canonical game identifier |
+| `date` | object (`datetime.date`) | Game date (local) |
+| `season` | int64 | Season |
+| `home_mlb_id`, `away_mlb_id` | int64 | MLB team IDs |
+| `home_retro`, `away_retro` | string | Retrosheet team codes |
+| `home_win` | float64 | 1.0 / 0.0 / NaN (NaN for 2026 pre-season) |
+| `home_elo`, `away_elo`, `elo_diff` | float64 | Elo ratings and differential |
+| `home_win_pct_{15,30,60}` | float64 | Rolling win % |
+| `away_win_pct_{15,30,60}` | float64 | Rolling win % |
+| `home_run_diff_{15,30,60}` | float64 | Rolling run differential |
+| `away_run_diff_{15,30,60}` | float64 | Rolling run differential |
+| `home_pythag_{15,30,60}` | float64 | Rolling Pythagorean expectation |
+| `away_pythag_{15,30,60}` | float64 | Rolling Pythagorean expectation |
+| `home_win_pct_ewm`, `away_win_pct_ewm` | float64 | EWMA win % (span=20) |
+| `home_run_diff_ewm`, `away_run_diff_ewm` | float64 | EWMA run differential |
+| `home_pythag_ewm`, `away_pythag_ewm` | float64 | EWMA Pythagorean |
+| `home_win_pct_home_only` | float64 | Win % in home games only (home team) |
+| `home_pythag_home_only` | float64 | Pythagorean in home games (home team) |
+| `away_win_pct_away_only` | float64 | Win % in road games only (away team) |
+| `away_pythag_away_only` | float64 | Pythagorean in road games (away team) |
+| `home_streak`, `away_streak` | float64 | Win/loss streak (+/−) |
+| `home_rest_days`, `away_rest_days` | float64 | Days since last game (capped at 10) |
+| `home_sp_era`, `away_sp_era` | float64 | Starter ERA (prior season) |
+| `home_sp_k9`, `away_sp_k9` | float64 | Starter K/9 (prior season) |
+| `home_sp_bb9`, `away_sp_bb9` | float64 | Starter BB/9 (prior season) |
+| `home_bat_woba`, `away_bat_woba` | float64 | Team wOBA (prior season) |
+| `home_bat_barrel_pct`, `away_bat_barrel_pct` | float64 | Team Barrel % |
+| `home_bat_hard_pct`, `away_bat_hard_pct` | float64 | Team Hard Hit % |
+| `home_pit_fip`, `away_pit_fip` | float64 | Team FIP |
+| `home_pit_xfip`, `away_pit_xfip` | float64 | Team xFIP |
+| `home_pit_k_pct`, `away_pit_k_pct` | float64 | Team K% |
+| `pythag_diff_30` | float64 | `home_pythag_30 − away_pythag_30` |
+| `pythag_diff_ewm` | float64 | `home_pythag_ewm − away_pythag_ewm` |
+| `home_away_split_diff` | float64 | Home-only vs road-only win% split differential |
+| `sp_era_diff` | float64 | `away_sp_era − home_sp_era` |
+| `woba_diff` | float64 | `home_bat_woba − away_bat_woba` |
+| `fip_diff` | float64 | `away_pit_fip − home_pit_fip` |
+| `park_run_factor` | float64 | Park run factor (median over history) |
+| `season_progress` | float64 | 0.0 (opener) → 1.0 (final day) |
+| `feature_hash` | string | SHA256 of numeric feature values for this row |
+
+Invariants:
+
+- Total columns: 70 (66 model features + 4 identifiers + `home_win` + `feature_hash`)
+- `date` column dtype is always `datetime.date` (never plain string)
+- 2026 rows have `home_win = NaN`; all 66 feature columns are populated from 2025 end-of-season team state
+
+## 3.8 Prediction snapshots
 
 Path template:
-- `data/processed/predictions/season=YYYY/snapshots/run_ts=<iso>.parquet`
 
-Schema (minimum):
+- `data/processed/predictions/season=YYYY/snapshots/run_ts=<iso>_<model>.parquet`
 
-| Column | Type | Required |
-|---|---|---:|
-| `game_pk` | int64 | yes |
-| `season` | int32 | yes |
-| `predicted_home_win_prob` | float | yes |
-| `run_ts_utc` | timestamp | yes |
-| `model_version` | string | yes |
-| `schedule_hash` | string | yes |
-| `feature_hash` | string | yes |
-| `lineup_param_hash` | string | yes |
-| `starter_param_hash` | string | yes |
-| `git_commit` | string | yes |
-| `tag` | string\|null | no |
+Schema:
+
+| Column | Type | Notes |
+|---|---|---|
+| `game_pk` | int64 | Canonical game identifier |
+| `home_team` | string | Retrosheet home team code |
+| `away_team` | string | Retrosheet away team code |
+| `predicted_home_win_prob` | float64 | Model output probability |
+| `run_ts_utc` | string | ISO 8601 UTC timestamp of the run |
+| `model_version` | string | e.g. `xgboost_v3_train2025` |
+| `schedule_hash` | string | SHA256 of the schedule Parquet |
+| `feature_hash` | string | SHA256 of the feature Parquet |
+| `lineup_param_hash` | string | Placeholder (reserved for lineup model) |
+| `starter_param_hash` | string | Placeholder (reserved for pitcher model) |
+| `git_commit` | string | Git HEAD SHA at run time |
+| `tag` | string\|null | Optional human label |
 
 Immutability:
+
 - Snapshot files MUST never be overwritten.
 
-## 3.6 Drift artifacts (planned contract)
+## 3.9 Drift artifacts
 
 Per-season metrics:
-- `data/processed/predictions/season=YYYY/run_metrics.parquet`
 
-Global metrics:
-- `data/processed/predictions/global_run_metrics.parquet`
+- `data/processed/drift/run_metrics_<season>.parquet`
 
-Diff artifacts (recommended):
-- incremental and baseline diffs stored as Parquet with stable schema:
-  - `game_pk`, `p_old`, `p_new`, `delta`, `abs_delta`, `direction`
+Global (deduplicated by season + run_ts_utc):
+
+- `data/processed/drift/global_run_metrics.parquet`
+
+Schema (both files share the same columns):
+
+| Column | Type | Notes |
+|---|---|---|
+| `run_ts_utc` | string | ISO 8601 UTC timestamp |
+| `model_version` | string | e.g. `xgboost_v3_train2025` |
+| `season` | int64 | Season evaluated |
+| `n_games` | int64 | Games in diff |
+| `mean_abs_delta` | float64 | Mean \|p_new − p_old\| |
+| `p95_abs_delta` | float64 | 95th percentile \|delta\| |
+| `max_abs_delta` | float64 | Maximum \|delta\| |
+| `pct_gt_0p01` | float64 | % of games with \|delta\| > 0.01 |
+| `pct_gt_0p02` | float64 | % of games with \|delta\| > 0.02 |
+| `pct_gt_0p05` | float64 | % of games with \|delta\| > 0.05 |
 
 ---
 

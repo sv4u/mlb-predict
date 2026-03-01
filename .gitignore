@@ -42,7 +42,11 @@ data/
 # macOS
 .DS_Store
 
-# Logs and summaries written at runtime
+# Runtime server artifacts
+server.pid
+logs/
+
+# Logs and runtime summaries (also covered by data/ above)
 *.log
 ingest_summary.json
 ingest_failures.parquet

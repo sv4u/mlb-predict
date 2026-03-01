@@ -60,6 +60,9 @@ def startup(model_type: str = "logistic") -> None:
     if not frames:
         raise RuntimeError("No feature files found.  Run build_features.py first.")
     _features = pd.concat(frames, ignore_index=True)
+    # Normalize date column to datetime.date across all seasons (guards against
+    # features_2026.parquet having string dates from a previous run).
+    _features["date"] = pd.to_datetime(_features["date"], errors="coerce").dt.date
 
     # Precompute predictions
     from winprob.model.artifacts import latest_artifact, load_model

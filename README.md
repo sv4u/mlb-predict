@@ -359,17 +359,20 @@ MLB Stats API        Retrosheet gamelogs      FanGraphs
 
 | Path                            | Contents                                                   |
 | ------------------------------- | ---------------------------------------------------------- |
-| `data/raw/schedules/`           | Raw MLB Stats API JSON responses                           |
-| `data/raw/gamelogs/`            | Raw Retrosheet TXT game logs                               |
-| `data/processed/schedule/`      | `games_YYYY.parquet` + checksums                           |
-| `data/processed/retrosheet/`    | `gamelogs_YYYY.parquet`                                    |
-| `data/processed/crosswalk/`     | `game_id_map_YYYY.parquet`, coverage report                |
-| `data/processed/pitcher_stats/` | `pitchers_YYYY.parquet` (MLB API individual stats)         |
+| `data/raw/mlb_api/schedule/`    | Raw MLB Stats API JSON responses (schedule endpoint)       |
+| `data/raw/mlb_api/stats/`       | Raw MLB Stats API JSON responses (pitcher stats endpoint)  |
+| `data/raw/mlb_api/teams/`       | Raw MLB Stats API JSON responses (teams endpoint)          |
+| `data/raw/retrosheet/gamelogs/` | Raw Retrosheet GL text files (`GL<YYYY>.TXT`)              |
+| `data/processed/schedule/`      | `games_YYYY.parquet` + CSV + checksums                     |
+| `data/processed/retrosheet/`    | `gamelogs_YYYY.parquet` + CSV + checksums                  |
+| `data/processed/crosswalk/`     | `game_id_map_YYYY.parquet`, coverage report, failed lists  |
+| `data/processed/teams/`         | `teams_YYYY.parquet` (MLB team roster metadata)            |
+| `data/processed/pitcher_stats/` | `pitchers_YYYY.parquet` (MLB API individual pitcher stats) |
 | `data/processed/fangraphs/`     | `fangraphs_YYYY.parquet` (FanGraphs team advanced metrics) |
-| `data/processed/features/`      | `features_YYYY.parquet` (66-feature matrix)                |
+| `data/processed/features/`      | `features_YYYY.parquet` (66-feature matrix per season)     |
 | `data/models/`                  | Trained model artifacts + HPO results + CV summaries       |
-| `data/processed/predictions/`   | Immutable prediction snapshots                             |
-| `data/processed/drift/`         | Drift monitoring logs                                      |
+| `data/processed/predictions/`   | Immutable prediction snapshots (Parquet, by season)        |
+| `data/processed/drift/`         | Drift monitoring logs (`run_metrics_YYYY.parquet`, global) |
 | `logs/server.log`               | Web server stdout/stderr                                   |
 | `logs/cron.log`                 | Daily cron job output                                      |
 | `server.pid`                    | PID of the running server process                          |

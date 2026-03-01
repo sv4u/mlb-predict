@@ -146,6 +146,9 @@ def _extract_state_from_role(
     """Extract the last-known feature state for each team from their home or away rows."""
     available = {c: n for c, n in col_map.items() if c in features.columns}
     result: dict[str, dict[str, float]] = {}
+    # Normalize date to datetime.date so mixed-type columns (str vs date) sort correctly
+    features = features.copy()
+    features["date"] = pd.to_datetime(features["date"], errors="coerce").dt.date
     for team, grp in features.sort_values("date").groupby(team_col):
         last = grp.iloc[-1]
         result[str(team)] = {neutral: float(last[col]) for col, neutral in available.items()}
@@ -251,7 +254,7 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
 
         row: dict = {
             "game_pk":    int(g["game_pk"]),
-            "date":       g["game_date_local"],
+            "date":       pd.to_datetime(g["game_date_local"]).date(),
             "season":     2026,
             "home_mlb_id": int(g["home_mlb_id"]),
             "away_mlb_id": int(g["away_mlb_id"]),
