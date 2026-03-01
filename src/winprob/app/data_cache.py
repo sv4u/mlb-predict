@@ -13,8 +13,11 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-_PROCESSED_DIR = Path("data/processed")
-_MODEL_DIR = Path("data/models")
+# Resolve paths relative to this file so the app works regardless of CWD.
+# Layout: src/winprob/app/data_cache.py → repo root is four levels up.
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_PROCESSED_DIR = _REPO_ROOT / "data" / "processed"
+_MODEL_DIR = _REPO_ROOT / "data" / "models"
 
 # Populated at startup
 _features: pd.DataFrame | None = None

@@ -35,7 +35,7 @@ set -euo pipefail
 REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 PYTHON="${PYTHON:-/Users/sasank.vishnubhatla/.pyenv/versions/3.11.14/bin/python3}"
 PORT="${PORT:-8087}"
-MODEL="${MODEL:-xgboost}"
+MODEL="${MODEL:-stacked}"
 LOG_DIR="$REPO/logs"
 PID_FILE="$REPO/server.pid"
 YEAR=$(date +%Y)
@@ -135,6 +135,12 @@ nohup "$PYTHON" scripts/serve.py \
 
 SERVER_PID=$!
 echo "$SERVER_PID" > "$PID_FILE"
+
+# Wait for the server to bind to the port before declaring success
+sleep 5
+if ! lsof -ti:"$PORT" > /dev/null 2>&1; then
+    die "Server failed to start on port $PORT — check $LOG_DIR/server.log"
+fi
 log "  ✓ Server started (PID $SERVER_PID) — http://127.0.0.1:$PORT"
 
 log "============================================================"

@@ -298,7 +298,7 @@ def main() -> None:
     ap.add_argument("--show-upsets", action="store_true", help="Show biggest upsets in the season")
     ap.add_argument("--show-schedule", action="store_true", help="Show all queried team games")
     ap.add_argument("--top-n", type=int, default=10, help="Number of results for --show-upsets")
-    ap.add_argument("--model-type", default="logistic", choices=["logistic", "lightgbm", "xgboost"])
+    ap.add_argument("--model-type", default="stacked", choices=["logistic", "lightgbm", "xgboost", "stacked"])
     ap.add_argument("--model-dir", type=Path, default=Path("data/models"))
     ap.add_argument("--no-shap", action="store_true", help="Skip SHAP computation")
     ap.add_argument("--brief", action="store_true", help="Compact one-line output per game")

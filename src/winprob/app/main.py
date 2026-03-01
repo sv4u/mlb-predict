@@ -33,7 +33,9 @@ app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 
 @app.on_event("startup")
 async def _startup() -> None:
-    startup()
+    import os
+    model_type = os.environ.get("WINPROB_MODEL_TYPE", "logistic")
+    startup(model_type)
 
 
 # ---------------------------------------------------------------------------
@@ -142,8 +144,9 @@ def api_game_detail(game_pk: int) -> dict:
             sv = explainer.shap_values(X_df)
             arr = sv[1][0] if isinstance(sv, list) else sv[0]
             shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, arr)}
-    except Exception:
-        pass
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("SHAP attribution failed for game_pk=%d: %s", game_pk, exc)
 
     # Top SHAP factors (sorted by absolute value)
     top_factors = sorted(

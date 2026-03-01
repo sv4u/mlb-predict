@@ -2,15 +2,14 @@
 
 ## MLB Win Probability Modeling System
 
-### Full Engineering Specification (v2)
+### Full Engineering Specification (v3)
 
 ------------------------------------------------------------------------
 
 # 1. System Overview
 
 This repository implements a research-grade, reproducible MLB win
-probability modeling platform covering seasons 2000–2025 and the current
-season (regular season only).
+probability modeling platform covering seasons 2000–2026 (regular season only).
 
 The system is designed to:
 
@@ -185,7 +184,7 @@ data/processed/predictions/season=YYYY/snapshots/
 
 Filename:
 
-run_ts=<ISO>.parquet
+run_ts=<ISO>_<model_type>.parquet
 
 Mandatory columns:
 
@@ -233,8 +232,8 @@ Run metrics schema:
 
 Logs:
 
--   season run_metrics.parquet
--   global_run_metrics.parquet (deduplicated by season + run_ts_utc)
+- run_metrics_<season>.parquet (per-season, keyed by model_type + run_ts_utc)
+- global_run_metrics.parquet (deduplicated by season + run_ts_utc + model_type)
 
 run_ts_utc is auto-generated and immutable.
 
@@ -244,10 +243,10 @@ run_ts_utc is auto-generated and immutable.
 
 Future feature modules must:
 
--   Accept season-scoped data
--   Produce deterministic feature matrices
--   Persist feature_hash
--   Be reproducible from raw inputs
+- Accept season-scoped data
+- Produce deterministic feature matrices
+- Persist feature_hash
+- Be reproducible from raw inputs
 
 No feature randomness allowed without seeded RNG recorded in metadata.
 
@@ -255,23 +254,25 @@ No feature randomness allowed without seeded RNG recorded in metadata.
 
 # 8. Modeling Contract
 
-Baseline model:
+Implemented models (all available via `--model` / `--model-type` flags):
 
--   Logistic regression
+- `logistic` — L2 logistic regression baseline
+- `lightgbm` — gradient boosted trees, Optuna-tuned
+- `xgboost` — gradient boosted trees, Optuna-tuned
+- `stacked` — meta-learner (logistic) over calibrated base-model outputs (default production model)
 
-Planned extensions:
+All models apply:
 
--   Pitcher strength priors
--   Lineup Monte Carlo simulation
--   Hierarchical team priors
--   Calibration layer
+- Platt calibration (sigmoid meta-layer) after training
+- Expanding-window cross-validation (train on seasons ≤ N-1, evaluate on N)
+- Time-weighted training (exponential decay sample weights for recency)
 
 Model artifacts must include:
 
--   model_version
--   training_seasons
--   hyperparameters
--   feature_set_version
+- model_version
+- training_seasons
+- hyperparameters
+- feature_set_version
 
 ------------------------------------------------------------------------
 
@@ -279,12 +280,12 @@ Model artifacts must include:
 
 All failures must classify into:
 
--   IngestionError
--   APIError
--   CoverageError
--   SchemaError
--   DriftComputationError
--   SnapshotIntegrityError
+- IngestionError
+- APIError
+- CoverageError
+- SchemaError
+- DriftComputationError
+- SnapshotIntegrityError
 
 Silent failure is forbidden.
 
@@ -294,26 +295,33 @@ Silent failure is forbidden.
 
 Agents must NOT:
 
--   Modify historical snapshots
--   Delete drift logs
--   Change coverage threshold
--   Introduce uncontrolled API concurrency
--   Remove provenance metadata
--   Introduce nondeterministic randomness
+- Modify historical snapshots
+- Delete drift logs
+- Change coverage threshold
+- Introduce uncontrolled API concurrency
+- Remove provenance metadata
+- Introduce nondeterministic randomness
 
 ------------------------------------------------------------------------
 
 # 11. Roadmap
 
+Implemented modules:
+
+1. Feature engineering pipeline (66 features, multi-window rolling, EWMA, Elo, home/away splits)
+2. Pitcher modeling (season-level ERA, K/9, BB/9, WHIP via MLB Stats API)
+3. Calibration engine (Platt calibration applied to all models)
+4. Explanation interface (SHAP for tree models; coefficient ranking for logistic)
+5. Web dashboard (FastAPI / Jinja2) with game browser, SHAP charts, upsets, 2026 season page
+6. CLI query tool (`scripts/query_game.py`)
+7. Daily automation (`scripts/update_daily.sh` + cron)
+
 Planned modules:
 
-1.  Feature engineering pipeline
-2.  Pitcher modeling
-3.  Lineup expectation engine
-4.  Monte Carlo simulation
-5.  Calibration engine
-6.  Market comparison module
-7.  Explanation interface
+1. Lineup expectation engine (batter quality from play-by-play / Statcast)
+2. Monte Carlo simulation (full lineup-aware game simulation)
+3. Market comparison module (line movement vs. predicted probability)
+4. Hierarchical team priors
 
 ------------------------------------------------------------------------
 
@@ -332,4 +340,4 @@ Agents must preserve system integrity across time.
 
 ------------------------------------------------------------------------
 
-END OF AGENTS.md (v2)
+END OF AGENTS.md (v3)

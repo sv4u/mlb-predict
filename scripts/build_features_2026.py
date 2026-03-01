@@ -183,7 +183,11 @@ def _build_team_state(features_all: pd.DataFrame) -> dict[str, dict[str, float]]
 def _resolve(state: dict[str, float], key: str) -> float:
     """Return the state value or the league-average default if missing/NaN."""
     v = state.get(key, np.nan)
-    return float(v) if not np.isnan(v) else _DEF[key]
+    if not np.isnan(v):
+        return float(v)
+    if key not in _DEF:
+        raise KeyError(f"No league-average default defined for feature '{key}' in _DEF")
+    return _DEF[key]
 
 
 def _park_factor_by_home_team(features_all: pd.DataFrame) -> dict[str, float]:
@@ -213,7 +217,11 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
     if not _SCHEDULE.exists():
         raise FileNotFoundError(f"2026 schedule not found at {_SCHEDULE}. Run ingest_schedule.py first.")
 
-    feature_files = sorted(_FEATURES.glob("features_*.parquet"))
+    # Explicitly exclude the 2026 file itself so team state is always derived
+    # from historical (2000–2025) data — not from a previous pre-season estimate.
+    feature_files = sorted(
+        f for f in _FEATURES.glob("features_*.parquet") if "2026" not in f.stem
+    )
     if not feature_files:
         raise RuntimeError("No historical feature files found. Run build_features.py first.")
 
@@ -327,7 +335,7 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
             "pythag_diff_30":        h_p30  - a_p30,
             "pythag_diff_ewm":       h_pewm - a_pewm,
             "home_away_split_diff":  h_home - a_away,
-            "sp_era_diff":           _resolve(h, "sp_era")    - _resolve(a, "sp_era"),
+            "sp_era_diff":           _resolve(a, "sp_era")    - _resolve(h, "sp_era"),
             "woba_diff":             _resolve(h, "bat_woba")  - _resolve(a, "bat_woba"),
             "fip_diff":              _resolve(h, "pit_fip")   - _resolve(a, "pit_fip"),
             # Park and context

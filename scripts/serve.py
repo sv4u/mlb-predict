@@ -34,7 +34,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Start the MLB Win Probability dashboard.")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8087)
-    ap.add_argument("--model", default="logistic", choices=["logistic", "lightgbm", "xgboost"])
+    ap.add_argument("--model", default="stacked", choices=["logistic", "lightgbm", "xgboost", "stacked"])
     ap.add_argument("--reload", action="store_true")
     args = ap.parse_args()
 

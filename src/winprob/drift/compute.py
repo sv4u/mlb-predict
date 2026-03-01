@@ -74,12 +74,15 @@ def _metrics_from_diff(diff: pd.DataFrame, *, run_ts: str, model_version: str, s
 def compute_drift(
     *,
     season: int,
+    model_type: str = "xgboost",
     snapshot_dir: Path = Path("data/processed/predictions"),
     drift_dir: Path = Path("data/processed/drift"),
 ) -> dict[str, DriftMetrics]:
     """Compute incremental and baseline drift for the latest snapshot.
 
     Snapshots are expected in ``snapshot_dir/season=YYYY/snapshots/``.
+    Only snapshots whose filename ends with ``_{model_type}.parquet`` are
+    considered, preventing cross-model comparisons.
 
     Returns
     -------
@@ -88,7 +91,7 @@ def compute_drift(
         ``DriftMetrics``.  Returns an empty dict if fewer than 2 snapshots exist.
     """
     snap_path = snapshot_dir / f"season={season}" / "snapshots"
-    snaps = sorted(snap_path.glob("*.parquet"))
+    snaps = sorted(snap_path.glob(f"*_{model_type}.parquet"))
     if len(snaps) < 2:
         return {}
 

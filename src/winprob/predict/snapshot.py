@@ -86,7 +86,8 @@ def write_snapshot(
     snap["run_ts_utc"] = run_ts
     snap["model_version"] = f"{model_type}_{model_version}"
     snap["schedule_hash"] = _file_hash(schedule_file)
-    snap["feature_hash"] = snap.get("feature_hash", "")
+    if "feature_hash" not in snap.columns:
+        snap["feature_hash"] = ""
     snap["lineup_param_hash"] = None   # placeholder for future lineup module
     snap["starter_param_hash"] = None  # placeholder for future pitcher module
     snap["git_commit"] = _git_commit()

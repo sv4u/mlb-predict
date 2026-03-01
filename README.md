@@ -158,9 +158,10 @@ python scripts/train_model.py
 ### Launch the web dashboard
 
 ```bash
-python scripts/serve.py                   # default: http://localhost:8087
+python scripts/serve.py                   # default: stacked ensemble, http://localhost:8087
 python scripts/serve.py --model xgboost   # use XGBoost model
 python scripts/serve.py --model lightgbm  # use LightGBM model
+python scripts/serve.py --model logistic  # use logistic regression
 ```
 
 Open:
@@ -194,14 +195,15 @@ python scripts/query_game.py --home NYY --season 2025 --brief
 ### Start in foreground (development)
 
 ```bash
-python scripts/serve.py --model xgboost
+python scripts/serve.py                   # stacked ensemble (default)
+python scripts/serve.py --model xgboost   # explicit model selection
 ```
 
 ### Start in background (production)
 
 ```bash
 mkdir -p logs
-nohup python scripts/serve.py --model xgboost >> logs/server.log 2>&1 &
+nohup python scripts/serve.py >> logs/server.log 2>&1 &
 echo $! > server.pid
 ```
 
@@ -230,7 +232,7 @@ pkill -f "serve.py"
 
 ```bash
 kill $(lsof -ti:8087) 2>/dev/null; sleep 2
-nohup python scripts/serve.py --model xgboost >> logs/server.log 2>&1 &
+nohup python scripts/serve.py >> logs/server.log 2>&1 &
 echo $! > server.pid
 ```
 
@@ -320,7 +322,7 @@ The script respects the following environment variables, which can be set inline
 
 ```bash
 # Use a different Python or model
-PYTHON=/usr/local/bin/python3 MODEL=lightgbm scripts/update_daily.sh
+PYTHON=/usr/local/bin/python3 MODEL=stacked scripts/update_daily.sh
 
 # Run for a specific season only (useful for backfilling)
 # Edit update_daily.sh YEAR variable or export:

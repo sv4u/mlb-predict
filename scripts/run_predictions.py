@@ -8,11 +8,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from winprob.model.artifacts import latest_artifact, load_model
-from winprob.model.train import FEATURE_COLS
+from winprob.model.train import FEATURE_COLS, _predict_proba
 from winprob.predict.snapshot import write_snapshot
 
 
@@ -26,8 +25,8 @@ def main() -> None:
     )
     ap.add_argument(
         "--model-type",
-        choices=["logistic", "lightgbm"],
-        default="lightgbm",
+        choices=["logistic", "lightgbm", "xgboost", "stacked"],
+        default="xgboost",
         help="Which model type to use for predictions",
     )
     ap.add_argument(
@@ -52,9 +51,9 @@ def main() -> None:
     if not features_path.exists():
         raise FileNotFoundError(f"Feature file not found: {features_path}")
 
-    artifact_dir = latest_artifact(args.model_type, model_dir=args.model_dir)
+    artifact_dir = latest_artifact(args.model_type, model_dir=args.model_dir, version="v3")
     if artifact_dir is None:
-        raise RuntimeError(f"No {args.model_type} model artifact found in {args.model_dir}")
+        raise RuntimeError(f"No {args.model_type} v3 model artifact found in {args.model_dir}")
 
     print(f"Loading model from {artifact_dir}")
     model, meta = load_model(artifact_dir)
@@ -62,9 +61,7 @@ def main() -> None:
     feat_df = pd.read_parquet(features_path)
     clean = feat_df.dropna(subset=FEATURE_COLS)
     X_df = clean[FEATURE_COLS].astype(float)
-    # LightGBM expects a named DataFrame; sklearn Pipelines expect numpy arrays.
-    is_lgbm = hasattr(model, "booster_")
-    y_prob = model.predict_proba(X_df if is_lgbm else X_df.values)[:, 1]
+    y_prob = _predict_proba(model, X_df)
 
     predictions = clean[["game_pk", "home_retro", "away_retro", "feature_hash"]].copy()
     predictions = predictions.rename(columns={"home_retro": "home_team", "away_retro": "away_team"})
