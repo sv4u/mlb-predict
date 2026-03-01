@@ -12,7 +12,6 @@ import hashlib
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 
@@ -22,7 +21,9 @@ def _git_commit() -> str:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return result.stdout.strip() or "unknown"
     except Exception:
@@ -88,16 +89,25 @@ def write_snapshot(
     snap["schedule_hash"] = _file_hash(schedule_file)
     if "feature_hash" not in snap.columns:
         snap["feature_hash"] = ""
-    snap["lineup_param_hash"] = None   # placeholder for future lineup module
+    snap["lineup_param_hash"] = None  # placeholder for future lineup module
     snap["starter_param_hash"] = None  # placeholder for future pitcher module
     snap["git_commit"] = _git_commit()
     snap["tag"] = tag
 
     # Enforce schema order
     cols = [
-        "game_pk", "home_team", "away_team", "predicted_home_win_prob",
-        "run_ts_utc", "model_version", "schedule_hash", "feature_hash",
-        "lineup_param_hash", "starter_param_hash", "git_commit", "tag",
+        "game_pk",
+        "home_team",
+        "away_team",
+        "predicted_home_win_prob",
+        "run_ts_utc",
+        "model_version",
+        "schedule_hash",
+        "feature_hash",
+        "lineup_param_hash",
+        "starter_param_hash",
+        "git_commit",
+        "tag",
     ]
     for c in cols:
         if c not in snap.columns:

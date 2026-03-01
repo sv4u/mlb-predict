@@ -1,18 +1,14 @@
 """Tests for winprob.util.hashing — sha256 utilities."""
+
 from __future__ import annotations
 
 import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import pytest
 
 if TYPE_CHECKING:
-    from _pytest.capture import CaptureFixture
-    from _pytest.fixtures import FixtureRequest
-    from _pytest.logging import LogCaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
-    from pytest_mock.plugin import MockerFixture
+    pass
 
 from winprob.util.hashing import sha256_aggregate_of_files, sha256_file
 

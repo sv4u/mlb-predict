@@ -89,7 +89,12 @@ def main() -> None:
         summary_df = pd.DataFrame(all_rows).sort_values(["season", "model"])
 
         print("\n=== Mean CV metrics by model ===")
-        print(summary_df.groupby("model")[["brier", "accuracy", "cal_err"]].mean().round(4).to_string())
+        print(
+            summary_df.groupby("model")[["brier", "accuracy", "cal_err"]]
+            .mean()
+            .round(4)
+            .to_string()
+        )
 
         print("\n=== Best / worst season by Brier ===")
         for mt, grp in summary_df.groupby("model"):

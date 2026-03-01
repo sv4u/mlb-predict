@@ -1,4 +1,5 @@
 """Tests for winprob.retrosheet.gamelogs."""
+
 from __future__ import annotations
 
 import hashlib
@@ -12,11 +13,7 @@ import pytest
 from aioresponses import aioresponses as aioresponses_ctx
 
 if TYPE_CHECKING:
-    from _pytest.capture import CaptureFixture
-    from _pytest.fixtures import FixtureRequest
-    from _pytest.logging import LogCaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
-    from pytest_mock.plugin import MockerFixture
+    pass
 
 from winprob.mlbapi.client import TokenBucket
 from winprob.retrosheet.gamelogs import (
@@ -152,6 +149,7 @@ def test_parse_gamelog_txt_numeric_columns(gamelog_txt_path: Path) -> None:
     assert df["visiting_score"].iloc[0] == 3
     assert df["home_score"].iloc[0] == 5
     import pandas as pd
+
     assert pd.api.types.is_numeric_dtype(df["game_num"])
 
 
@@ -211,9 +209,7 @@ async def test_download_chadwick_primary_success(tmp_path: Path, gamelog_txt_pat
     assert result["sha256"] == sha256_bytes(raw_content)
 
 
-async def test_download_fallback_on_primary_failure(
-    tmp_path: Path, gamelog_txt_path: Path
-) -> None:
+async def test_download_fallback_on_primary_failure(tmp_path: Path, gamelog_txt_path: Path) -> None:
     """When the primary source fails, the fallback source must be tried."""
     out = tmp_path / "fallback" / "GL2024.TXT"
     raw_content = gamelog_txt_path.read_bytes()

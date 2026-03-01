@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from dataclasses import dataclass
 import pandas as pd
 
@@ -38,22 +37,39 @@ def _prep_schedule(schedule: pd.DataFrame) -> pd.DataFrame:
 
 
 _CROSSWALK_COLS = [
-    "date", "home_mlb_id", "away_mlb_id", "home_retro", "away_retro",
-    "dh_game_num", "status", "mlb_game_pk", "match_confidence", "notes",
+    "date",
+    "home_mlb_id",
+    "away_mlb_id",
+    "home_retro",
+    "away_retro",
+    "dh_game_num",
+    "status",
+    "mlb_game_pk",
+    "match_confidence",
+    "notes",
 ]
 
 
-def build_crosswalk(*, season: int, schedule: pd.DataFrame, gamelogs: pd.DataFrame, retro_team_map: RetroTeamMap) -> CrosswalkResult:
+def build_crosswalk(
+    *, season: int, schedule: pd.DataFrame, gamelogs: pd.DataFrame, retro_team_map: RetroTeamMap
+) -> CrosswalkResult:
     sched = _prep_schedule(schedule)
 
     gl = gamelogs.copy().dropna(subset=["date", "home_team", "visiting_team"])
     if gl.empty:
         return CrosswalkResult(
             df=pd.DataFrame(columns=_CROSSWALK_COLS),
-            coverage_pct=0.0, matched=0, missing=0, ambiguous=0,
+            coverage_pct=0.0,
+            matched=0,
+            missing=0,
+            ambiguous=0,
         )
-    gl["home_mlb_id"] = gl["home_team"].map(lambda x: retro_team_map.retro_to_mlb_id(str(x), season))
-    gl["away_mlb_id"] = gl["visiting_team"].map(lambda x: retro_team_map.retro_to_mlb_id(str(x), season))
+    gl["home_mlb_id"] = gl["home_team"].map(
+        lambda x: retro_team_map.retro_to_mlb_id(str(x), season)
+    )
+    gl["away_mlb_id"] = gl["visiting_team"].map(
+        lambda x: retro_team_map.retro_to_mlb_id(str(x), season)
+    )
     gl["dh_game_num"] = pd.to_numeric(gl["game_num"], errors="coerce").astype("Int64")
 
     merged = gl.merge(
@@ -64,39 +80,56 @@ def build_crosswalk(*, season: int, schedule: pd.DataFrame, gamelogs: pd.DataFra
 
     def resolve_group(g: pd.DataFrame) -> pd.DataFrame:
         if g["game_pk"].isna().all():
-            return g.head(1).assign(status="missing", mlb_game_pk=pd.NA, match_confidence=0.0, notes="no_schedule_match")
+            return g.head(1).assign(
+                status="missing", mlb_game_pk=pd.NA, match_confidence=0.0, notes="no_schedule_match"
+            )
         cands = g.dropna(subset=["game_pk"])
         if cands["game_pk"].nunique() == 1:
             pk = int(cands["game_pk"].iloc[0])
-            return g.head(1).assign(status="matched", mlb_game_pk=pk, match_confidence=1.0, notes="unique")
+            return g.head(1).assign(
+                status="matched", mlb_game_pk=pk, match_confidence=1.0, notes="unique"
+            )
         if pd.notna(g["dh_game_num"].iloc[0]):
             m = cands[cands["game_number"] == g["dh_game_num"].iloc[0]]
             if m["game_pk"].nunique() == 1:
                 pk = int(m["game_pk"].iloc[0])
-                return g.head(1).assign(status="matched", mlb_game_pk=pk, match_confidence=0.9, notes="matched_on_game_number")
-        return g.head(1).assign(status="ambiguous", mlb_game_pk=pd.NA, match_confidence=0.0, notes="multiple_candidates")
+                return g.head(1).assign(
+                    status="matched",
+                    mlb_game_pk=pk,
+                    match_confidence=0.9,
+                    notes="matched_on_game_number",
+                )
+        return g.head(1).assign(
+            status="ambiguous", mlb_game_pk=pd.NA, match_confidence=0.0, notes="multiple_candidates"
+        )
 
     key_cols = ["date", "home_mlb_id", "away_mlb_id", "home_team", "visiting_team", "dh_game_num"]
-    gb = merged.groupby(key_cols, dropna=False, as_index=False)
-    # include_groups=True was added in pandas 2.2 to silence a FutureWarning;
-    # fall back for older environments.
-    _apply_kwargs = {}
-    if "include_groups" in inspect.signature(gb.apply).parameters:
-        _apply_kwargs["include_groups"] = True
-    resolved = gb.apply(resolve_group, **_apply_kwargs).reset_index(drop=True)
+    # Iterate groups explicitly so key columns remain available inside
+    # resolve_group without relying on the deprecated include_groups API
+    # (removed in pandas 2.3).
+    resolved_rows = [
+        resolve_group(g) for _, g in merged.groupby(key_cols, dropna=False, sort=False)
+    ]
+    resolved = (
+        pd.concat(resolved_rows, ignore_index=True)
+        if resolved_rows
+        else pd.DataFrame(columns=merged.columns)
+    )
 
-    out = resolved[[
-        "date",
-        "home_mlb_id",
-        "away_mlb_id",
-        "home_team",
-        "visiting_team",
-        "dh_game_num",
-        "status",
-        "mlb_game_pk",
-        "match_confidence",
-        "notes",
-    ]].rename(columns={"home_team": "home_retro", "visiting_team": "away_retro"})
+    out = resolved[
+        [
+            "date",
+            "home_mlb_id",
+            "away_mlb_id",
+            "home_team",
+            "visiting_team",
+            "dh_game_num",
+            "status",
+            "mlb_game_pk",
+            "match_confidence",
+            "notes",
+        ]
+    ].rename(columns={"home_team": "home_retro", "visiting_team": "away_retro"})
 
     # --- Fallback pass: try swapped home/away for any still-missing games ------
     # In unusual seasons (e.g. 2020 COVID relocations) a game may be played at
@@ -128,4 +161,6 @@ def build_crosswalk(*, season: int, schedule: pd.DataFrame, gamelogs: pd.DataFra
     missing = int((out["status"] == "missing").sum())
     coverage_pct = 100.0 * matched / max(len(out), 1)
 
-    return CrosswalkResult(df=out, coverage_pct=coverage_pct, matched=matched, missing=missing, ambiguous=ambiguous)
+    return CrosswalkResult(
+        df=out, coverage_pct=coverage_pct, matched=matched, missing=missing, ambiguous=ambiguous
+    )

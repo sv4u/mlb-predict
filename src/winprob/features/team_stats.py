@@ -86,9 +86,9 @@ def _split_rolling(
     n = home_grp["win"].rolling(window, min_periods=1).count().shift(1)
 
     home_wp = (roll_win / n).fillna(_NEUTRAL_WIN_PCT)
-    home_py = pd.Series(
-        _pythag(roll_rs.fillna(0), roll_ra.fillna(0)), index=home_idx
-    ).where(n.notna() & (n > 0), other=_NEUTRAL_PYTHAG)
+    home_py = pd.Series(_pythag(roll_rs.fillna(0), roll_ra.fillna(0)), index=home_idx).where(
+        n.notna() & (n > 0), other=_NEUTRAL_PYTHAG
+    )
 
     win_pct_full.loc[home_idx] = home_wp.values
     pythag_full.loc[home_idx] = home_py.values
@@ -102,6 +102,7 @@ def _split_rolling(
 # ---------------------------------------------------------------------------
 # Main builder
 # ---------------------------------------------------------------------------
+
 
 def build_team_rolling_stats(
     gamelogs: pd.DataFrame,
@@ -165,7 +166,9 @@ def build_team_rolling_stats(
             roll_ra = grp["ra"].rolling(w, min_periods=1).sum().shift(1)
             n = grp["win"].rolling(w, min_periods=1).count().shift(1)
             rows[f"win_pct_{w}"] = (roll_win / n).fillna(_NEUTRAL_WIN_PCT).values.tolist()
-            rows[f"run_diff_{w}"] = ((roll_rs - roll_ra) / n).fillna(_NEUTRAL_RUN_DIFF).values.tolist()
+            rows[f"run_diff_{w}"] = (
+                ((roll_rs - roll_ra) / n).fillna(_NEUTRAL_RUN_DIFF).values.tolist()
+            )
             py = pd.Series(_pythag(roll_rs.fillna(0), roll_ra.fillna(0)), index=idx)
             rows[f"pythag_{w}"] = py.where(n.notna() & (n > 0), _NEUTRAL_PYTHAG).values.tolist()
             rows[f"n_games_{w}"] = n.fillna(0).values.tolist()
@@ -176,9 +179,11 @@ def build_team_rolling_stats(
         ewm_ra = grp["ra"].ewm(span=ewma_span, adjust=False).mean().shift(1)
         rows["win_pct_ewm"] = ewm_win.fillna(_NEUTRAL_WIN_PCT).values.tolist()
         rows["run_diff_ewm"] = (ewm_rs - ewm_ra).fillna(_NEUTRAL_RUN_DIFF).values.tolist()
-        rows["pythag_ewm"] = pd.Series(
-            _pythag(ewm_rs.fillna(0), ewm_ra.fillna(0)), index=idx
-        ).fillna(_NEUTRAL_PYTHAG).values.tolist()
+        rows["pythag_ewm"] = (
+            pd.Series(_pythag(ewm_rs.fillna(0), ewm_ra.fillna(0)), index=idx)
+            .fillna(_NEUTRAL_PYTHAG)
+            .values.tolist()
+        )
 
         # Streak
         rows["streak"] = _compute_streak(grp["win"].values).tolist()

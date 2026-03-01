@@ -17,6 +17,7 @@ FIP, xFIP, K%, BB%, HR/FB%, WHIP
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import pandas as pd
 
@@ -26,27 +27,40 @@ logger = logging.getLogger(__name__)
 # Retrosheet uses NL/AL city codes; FanGraphs uses BBREF-style codes.
 RETRO_TO_FG: dict[str, str] = {
     # Identical codes
-    "ARI": "ARI", "ATL": "ATL", "BAL": "BAL", "BOS": "BOS",
-    "CIN": "CIN", "CLE": "CLE", "COL": "COL", "DET": "DET",
-    "HOU": "HOU", "MIA": "MIA", "MIL": "MIL", "MIN": "MIN",
-    "OAK": "OAK", "PHI": "PHI", "PIT": "PIT", "SEA": "SEA",
-    "TEX": "TEX", "TOR": "TOR",
+    "ARI": "ARI",
+    "ATL": "ATL",
+    "BAL": "BAL",
+    "BOS": "BOS",
+    "CIN": "CIN",
+    "CLE": "CLE",
+    "COL": "COL",
+    "DET": "DET",
+    "HOU": "HOU",
+    "MIA": "MIA",
+    "MIL": "MIL",
+    "MIN": "MIN",
+    "OAK": "OAK",
+    "PHI": "PHI",
+    "PIT": "PIT",
+    "SEA": "SEA",
+    "TEX": "TEX",
+    "TOR": "TOR",
     # Differences
-    "ANA": "LAA",   # Angels (2000-2004)
-    "ATH": "OAK",   # Athletics (2025+ Las Vegas move in Retrosheet)
-    "CHA": "CHW",   # White Sox
-    "CHN": "CHC",   # Cubs
-    "FLO": "MIA",   # Marlins (pre-2012)
-    "KCA": "KCR",   # Royals
-    "LAN": "LAD",   # Dodgers
-    "MON": "WSN",   # Expos (pre-2005) → Nationals
-    "NYA": "NYY",   # Yankees
-    "NYN": "NYM",   # Mets
-    "SDN": "SDP",   # Padres
-    "SFN": "SFG",   # Giants
-    "SLN": "STL",   # Cardinals
-    "TBA": "TBR",   # Rays
-    "WAS": "WSN",   # Nationals (post-2005)
+    "ANA": "LAA",  # Angels (2000-2004)
+    "ATH": "OAK",  # Athletics (2025+ Las Vegas move in Retrosheet)
+    "CHA": "CHW",  # White Sox
+    "CHN": "CHC",  # Cubs
+    "FLO": "MIA",  # Marlins (pre-2012)
+    "KCA": "KCR",  # Royals
+    "LAN": "LAD",  # Dodgers
+    "MON": "WSN",  # Expos (pre-2005) → Nationals
+    "NYA": "NYY",  # Yankees
+    "NYN": "NYM",  # Mets
+    "SDN": "SDP",  # Padres
+    "SFN": "SFG",  # Giants
+    "SLN": "STL",  # Cardinals
+    "TBA": "TBR",  # Rays
+    "WAS": "WSN",  # Nationals (post-2005)
 }
 
 _BAT_COLS = {
@@ -72,7 +86,8 @@ _PIT_COLS = {
 
 def _safe_fetch_batting(season: int) -> pd.DataFrame:
     try:
-        from pybaseball import team_batting  # type: ignore[import]
+        from pybaseball import team_batting  # type: ignore[import-untyped,unused-ignore]
+
         df = team_batting(season, season)
         return df[[c for c in _BAT_COLS if c in df.columns]].rename(columns=_BAT_COLS)
     except Exception as exc:
@@ -82,7 +97,8 @@ def _safe_fetch_batting(season: int) -> pd.DataFrame:
 
 def _safe_fetch_pitching(season: int) -> pd.DataFrame:
     try:
-        from pybaseball import team_pitching  # type: ignore[import]
+        from pybaseball import team_pitching  # type: ignore[import-untyped,unused-ignore]
+
         df = team_pitching(season, season)
         return df[[c for c in _PIT_COLS if c in df.columns]].rename(columns=_PIT_COLS)
     except Exception as exc:
@@ -91,7 +107,7 @@ def _safe_fetch_pitching(season: int) -> pd.DataFrame:
 
 
 def load_fg_team_map(
-    fg_dir: "Path",  # type: ignore[name-defined]
+    fg_dir: Path,
     season: int,
 ) -> dict[str, dict[str, float]]:
     """Load FanGraphs data for *season* as a Retrosheet-code → stats dict.
@@ -110,8 +126,6 @@ def load_fg_team_map(
         bat_hard_pct, bat_xwoba, pit_fip, pit_xfip, pit_k_pct, pit_bb_pct,
         pit_whip}.
     """
-    from pathlib import Path
-
     path = Path(fg_dir) / f"fangraphs_{season}.parquet"
     if not path.exists():
         return {}
@@ -119,10 +133,7 @@ def load_fg_team_map(
 
     # Build fg_code → stats dict
     fg_map: dict[str, dict[str, float]] = {}
-    stat_cols = [
-        c for c in df.columns
-        if c not in ("team_fg", "season")
-    ]
+    stat_cols = [c for c in df.columns if c not in ("team_fg", "season")]
     for _, row in df.iterrows():
         fg_code = str(row.get("team_fg", ""))
         if not fg_code:
@@ -130,7 +141,6 @@ def load_fg_team_map(
         fg_map[fg_code] = {c: float(row[c]) for c in stat_cols if pd.notna(row.get(c))}
 
     # Re-key by Retrosheet code
-    fg_to_retro = {v: k for k, v in RETRO_TO_FG.items() if v in fg_map}
     retro_map: dict[str, dict[str, float]] = {}
     for fg_code, stats in fg_map.items():
         retro_codes = [k for k, v in RETRO_TO_FG.items() if v == fg_code]

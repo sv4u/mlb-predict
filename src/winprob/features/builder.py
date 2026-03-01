@@ -31,7 +31,6 @@ import pandas as pd
 from winprob.features.elo import compute_elo_ratings
 from winprob.features.team_stats import build_team_rolling_stats
 from winprob.features.park_factors import compute_park_factors, _NEUTRAL_FACTOR
-from winprob.statcast.fangraphs import load_fg_team_map
 
 _LEAGUE_AVG_ERA: float = 4.50
 _LEAGUE_AVG_K9: float = 8.5
@@ -40,42 +39,72 @@ _SHRINKAGE_PRIOR_W: float = 0.30  # weight given to prior-season API stats (vs g
 
 FEATURE_COLS: list[str] = [
     # --- Elo ------------------------------------------------------------------
-    "home_elo", "away_elo", "elo_diff",
+    "home_elo",
+    "away_elo",
+    "elo_diff",
     # --- Multi-window rolling -------------------------------------------------
-    "home_win_pct_15", "home_win_pct_30", "home_win_pct_60",
-    "away_win_pct_15", "away_win_pct_30", "away_win_pct_60",
-    "home_run_diff_15", "home_run_diff_30", "home_run_diff_60",
-    "away_run_diff_15", "away_run_diff_30", "away_run_diff_60",
-    "home_pythag_15", "home_pythag_30", "home_pythag_60",
-    "away_pythag_15", "away_pythag_30", "away_pythag_60",
+    "home_win_pct_15",
+    "home_win_pct_30",
+    "home_win_pct_60",
+    "away_win_pct_15",
+    "away_win_pct_30",
+    "away_win_pct_60",
+    "home_run_diff_15",
+    "home_run_diff_30",
+    "home_run_diff_60",
+    "away_run_diff_15",
+    "away_run_diff_30",
+    "away_run_diff_60",
+    "home_pythag_15",
+    "home_pythag_30",
+    "home_pythag_60",
+    "away_pythag_15",
+    "away_pythag_30",
+    "away_pythag_60",
     # --- EWMA rolling ---------------------------------------------------------
-    "home_win_pct_ewm", "away_win_pct_ewm",
-    "home_run_diff_ewm", "away_run_diff_ewm",
-    "home_pythag_ewm", "away_pythag_ewm",
+    "home_win_pct_ewm",
+    "away_win_pct_ewm",
+    "home_run_diff_ewm",
+    "away_run_diff_ewm",
+    "home_pythag_ewm",
+    "away_pythag_ewm",
     # --- Home/away performance splits ----------------------------------------
-    "home_win_pct_home_only", "home_pythag_home_only",
-    "away_win_pct_away_only", "away_pythag_away_only",
+    "home_win_pct_home_only",
+    "home_pythag_home_only",
+    "away_win_pct_away_only",
+    "away_pythag_away_only",
     # --- Streak and rest ------------------------------------------------------
-    "home_streak", "away_streak",
-    "home_rest_days", "away_rest_days",
+    "home_streak",
+    "away_streak",
+    "home_rest_days",
+    "away_rest_days",
     # --- Pitcher stats --------------------------------------------------------
-    "home_sp_era", "away_sp_era",
-    "home_sp_k9", "away_sp_k9",
-    "home_sp_bb9", "away_sp_bb9",
+    "home_sp_era",
+    "away_sp_era",
+    "home_sp_k9",
+    "away_sp_k9",
+    "home_sp_bb9",
+    "away_sp_bb9",
     # --- FanGraphs advanced metrics (prior season) ---------------------------
-    "home_bat_woba", "away_bat_woba",
-    "home_bat_barrel_pct", "away_bat_barrel_pct",
-    "home_bat_hard_pct", "away_bat_hard_pct",
-    "home_pit_fip", "away_pit_fip",
-    "home_pit_xfip", "away_pit_xfip",
-    "home_pit_k_pct", "away_pit_k_pct",
+    "home_bat_woba",
+    "away_bat_woba",
+    "home_bat_barrel_pct",
+    "away_bat_barrel_pct",
+    "home_bat_hard_pct",
+    "away_bat_hard_pct",
+    "home_pit_fip",
+    "away_pit_fip",
+    "home_pit_xfip",
+    "away_pit_xfip",
+    "home_pit_k_pct",
+    "away_pit_k_pct",
     # --- Differentials --------------------------------------------------------
-    "pythag_diff_30",           # home_pythag_30 - away_pythag_30
-    "pythag_diff_ewm",          # home_pythag_ewm - away_pythag_ewm
-    "home_away_split_diff",     # home_win_pct_home_only - away_win_pct_away_only
-    "sp_era_diff",              # away_sp_era - home_sp_era
-    "woba_diff",                # home_bat_woba - away_bat_woba
-    "fip_diff",                 # away_pit_fip - home_pit_fip
+    "pythag_diff_30",  # home_pythag_30 - away_pythag_30
+    "pythag_diff_ewm",  # home_pythag_ewm - away_pythag_ewm
+    "home_away_split_diff",  # home_win_pct_home_only - away_win_pct_away_only
+    "sp_era_diff",  # away_sp_era - home_sp_era
+    "woba_diff",  # home_bat_woba - away_bat_woba
+    "fip_diff",  # away_pit_fip - home_pit_fip
     # --- Park / context -------------------------------------------------------
     "park_run_factor",
     "season_progress",
@@ -88,6 +117,7 @@ FEATURE_COLS = list(dict.fromkeys(FEATURE_COLS))
 # Pitcher feature helpers
 # ---------------------------------------------------------------------------
 
+
 def _normalize_name(name: str) -> str:
     """Lowercase, strip accents, collapse whitespace."""
     nfkd = unicodedata.normalize("NFKD", name)
@@ -95,9 +125,7 @@ def _normalize_name(name: str) -> str:
     return " ".join(ascii_only.lower().split())
 
 
-def _load_api_pitcher_map(
-    pitcher_stats_dir: Path, season: int
-) -> dict[str, dict[str, float]]:
+def _load_api_pitcher_map(pitcher_stats_dir: Path, season: int) -> dict[str, dict[str, float]]:
     """Load MLB API pitcher stats for *season* into a name→stats lookup dict.
 
     Returns
@@ -134,6 +162,7 @@ def _pitcher_api_features(
     away_era, away_k9, away_bb9 = [], [], []
 
     for _, row in gamelogs.iterrows():
+
         def _lookup(name_col: str) -> dict[str, float]:
             name = row.get(name_col, "")
             if not name or pd.isna(name):
@@ -167,6 +196,7 @@ def _pitcher_api_features(
 # Feature hash
 # ---------------------------------------------------------------------------
 
+
 def _hash_feature_row(row: pd.Series) -> str:
     vals = {c: (float(row[c]) if pd.notna(row.get(c)) else None) for c in FEATURE_COLS}
     return hashlib.sha256(json.dumps(vals, sort_keys=True).encode()).hexdigest()
@@ -176,6 +206,7 @@ def _hash_feature_row(row: pd.Series) -> str:
 # Main builder
 # ---------------------------------------------------------------------------
 
+
 def _fangraphs_features(
     gamelogs: pd.DataFrame,
     fg_home_map: dict[str, dict[str, float]],
@@ -183,12 +214,20 @@ def _fangraphs_features(
 ) -> pd.DataFrame:
     """Add FanGraphs team advanced metrics for home and away teams."""
     _FG_KEYS = [
-        "bat_woba", "bat_barrel_pct", "bat_hard_pct",
-        "pit_fip", "pit_xfip", "pit_k_pct",
+        "bat_woba",
+        "bat_barrel_pct",
+        "bat_hard_pct",
+        "pit_fip",
+        "pit_xfip",
+        "pit_k_pct",
     ]
     _DEFAULTS = {
-        "bat_woba": 0.320, "bat_barrel_pct": 0.08, "bat_hard_pct": 0.38,
-        "pit_fip": 4.20, "pit_xfip": 4.20, "pit_k_pct": 0.22,
+        "bat_woba": 0.320,
+        "bat_barrel_pct": 0.08,
+        "bat_hard_pct": 0.38,
+        "pit_fip": 4.20,
+        "pit_xfip": 4.20,
+        "pit_k_pct": 0.22,
     }
 
     rows: dict[str, list] = {f"home_{k}": [] for k in _FG_KEYS}
@@ -264,9 +303,7 @@ def build_feature_matrix(
     )
 
     # --- Park factor lookup -------------------------------------------------
-    park_run_factor = (
-        gl["park_id"].astype(str).map(park_factors).fillna(_NEUTRAL_FACTOR)
-    )
+    park_run_factor = gl["park_id"].astype(str).map(park_factors).fillna(_NEUTRAL_FACTOR)
 
     # --- Season progress (0 → 1 over the season) ----------------------------
     dates = pd.to_datetime(gl["date"])
@@ -301,18 +338,29 @@ def build_feature_matrix(
 
     # --- Differential features ----------------------------------------------
     combined["pythag_diff_30"] = combined["home_pythag_30"] - combined["away_pythag_30"]
-    combined["pythag_diff_ewm"] = combined.get("home_pythag_ewm", 0.5) - combined.get("away_pythag_ewm", 0.5)
-    combined["home_away_split_diff"] = (
-        combined.get("home_win_pct_home_only", 0.5)
-        - combined.get("away_win_pct_away_only", 0.5)
+    combined["pythag_diff_ewm"] = combined.get("home_pythag_ewm", 0.5) - combined.get(
+        "away_pythag_ewm", 0.5
+    )
+    combined["home_away_split_diff"] = combined.get("home_win_pct_home_only", 0.5) - combined.get(
+        "away_win_pct_away_only", 0.5
     )
     combined["sp_era_diff"] = combined["away_sp_era"] - combined["home_sp_era"]
-    combined["woba_diff"] = combined.get("home_bat_woba", 0.320) - combined.get("away_bat_woba", 0.320)
+    combined["woba_diff"] = combined.get("home_bat_woba", 0.320) - combined.get(
+        "away_bat_woba", 0.320
+    )
     combined["fip_diff"] = combined.get("away_pit_fip", 4.20) - combined.get("home_pit_fip", 4.20)
 
     # --- Join crosswalk to get game_pk and MLB team IDs ---------------------
     cw_matched = crosswalk[crosswalk["status"] == "matched"][
-        ["date", "home_retro", "away_retro", "dh_game_num", "home_mlb_id", "away_mlb_id", "mlb_game_pk"]
+        [
+            "date",
+            "home_retro",
+            "away_retro",
+            "dh_game_num",
+            "home_mlb_id",
+            "away_mlb_id",
+            "mlb_game_pk",
+        ]
     ].copy()
     cw_matched["date"] = pd.to_datetime(cw_matched["date"]).dt.date
     cw_matched["dh_game_num"] = (
@@ -332,8 +380,16 @@ def build_feature_matrix(
     merged["feature_hash"] = merged.apply(_hash_feature_row, axis=1)
 
     output_cols = (
-        ["game_pk", "date", "season", "home_mlb_id", "away_mlb_id",
-         "home_retro", "away_retro", "home_win"]
+        [
+            "game_pk",
+            "date",
+            "season",
+            "home_mlb_id",
+            "away_mlb_id",
+            "home_retro",
+            "away_retro",
+            "home_win",
+        ]
         + FEATURE_COLS
         + ["feature_hash"]
     )
@@ -347,6 +403,7 @@ def build_feature_matrix(
 # ---------------------------------------------------------------------------
 # Utility loaders
 # ---------------------------------------------------------------------------
+
 
 def load_or_build_park_factors(
     processed_dir: Path = Path("data/processed"),

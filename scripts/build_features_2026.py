@@ -29,40 +29,40 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
 
 _PROCESSED = Path("data/processed")
-_SCHEDULE  = _PROCESSED / "schedule" / "games_2026.parquet"
-_TEAM_MAP  = _PROCESSED / "team_id_map_retro_to_mlb.csv"
-_FEATURES  = _PROCESSED / "features"
-_OUT       = _FEATURES / "features_2026.parquet"
+_SCHEDULE = _PROCESSED / "schedule" / "games_2026.parquet"
+_TEAM_MAP = _PROCESSED / "team_id_map_retro_to_mlb.csv"
+_FEATURES = _PROCESSED / "features"
+_OUT = _FEATURES / "features_2026.parquet"
 
 # League-average fall-backs for teams with missing data
 _DEF: dict[str, float] = {
-    "elo":              1500.0,
-    "win_pct_15":       0.500,
-    "win_pct_30":       0.500,
-    "win_pct_60":       0.500,
-    "run_diff_15":      0.0,
-    "run_diff_30":      0.0,
-    "run_diff_60":      0.0,
-    "pythag_15":        0.500,
-    "pythag_30":        0.500,
-    "pythag_60":        0.500,
-    "win_pct_ewm":      0.500,
-    "run_diff_ewm":     0.0,
-    "pythag_ewm":       0.500,
-    "streak":           0.0,
+    "elo": 1500.0,
+    "win_pct_15": 0.500,
+    "win_pct_30": 0.500,
+    "win_pct_60": 0.500,
+    "run_diff_15": 0.0,
+    "run_diff_30": 0.0,
+    "run_diff_60": 0.0,
+    "pythag_15": 0.500,
+    "pythag_30": 0.500,
+    "pythag_60": 0.500,
+    "win_pct_ewm": 0.500,
+    "run_diff_ewm": 0.0,
+    "pythag_ewm": 0.500,
+    "streak": 0.0,
     "win_pct_home_only": 0.500,
-    "pythag_home_only":  0.500,
+    "pythag_home_only": 0.500,
     "win_pct_away_only": 0.500,
-    "pythag_away_only":  0.500,
-    "sp_era":           4.50,
-    "sp_k9":            8.50,
-    "sp_bb9":           3.00,
-    "bat_woba":         0.320,
-    "bat_barrel_pct":   0.080,
-    "bat_hard_pct":     0.370,
-    "pit_fip":          4.20,
-    "pit_xfip":         4.20,
-    "pit_k_pct":        0.220,
+    "pythag_away_only": 0.500,
+    "sp_era": 4.50,
+    "sp_k9": 8.50,
+    "sp_bb9": 3.00,
+    "bat_woba": 0.320,
+    "bat_barrel_pct": 0.080,
+    "bat_hard_pct": 0.370,
+    "pit_fip": 4.20,
+    "pit_xfip": 4.20,
+    "pit_k_pct": 0.220,
 }
 
 # How many rest days to assign for the off-season gap
@@ -70,65 +70,66 @@ _OFF_SEASON_REST: float = 5.0
 
 # Map of feature column names → neutral key (strips home_/away_ prefix)
 _HOME_COL_MAP: dict[str, str] = {
-    "home_elo":               "elo",
-    "home_win_pct_15":        "win_pct_15",
-    "home_win_pct_30":        "win_pct_30",
-    "home_win_pct_60":        "win_pct_60",
-    "home_run_diff_15":       "run_diff_15",
-    "home_run_diff_30":       "run_diff_30",
-    "home_run_diff_60":       "run_diff_60",
-    "home_pythag_15":         "pythag_15",
-    "home_pythag_30":         "pythag_30",
-    "home_pythag_60":         "pythag_60",
-    "home_win_pct_ewm":       "win_pct_ewm",
-    "home_run_diff_ewm":      "run_diff_ewm",
-    "home_pythag_ewm":        "pythag_ewm",
-    "home_streak":            "streak",
-    "home_sp_era":            "sp_era",
-    "home_sp_k9":             "sp_k9",
-    "home_sp_bb9":            "sp_bb9",
-    "home_bat_woba":          "bat_woba",
-    "home_bat_barrel_pct":    "bat_barrel_pct",
-    "home_bat_hard_pct":      "bat_hard_pct",
-    "home_pit_fip":           "pit_fip",
-    "home_pit_xfip":          "pit_xfip",
-    "home_pit_k_pct":         "pit_k_pct",
+    "home_elo": "elo",
+    "home_win_pct_15": "win_pct_15",
+    "home_win_pct_30": "win_pct_30",
+    "home_win_pct_60": "win_pct_60",
+    "home_run_diff_15": "run_diff_15",
+    "home_run_diff_30": "run_diff_30",
+    "home_run_diff_60": "run_diff_60",
+    "home_pythag_15": "pythag_15",
+    "home_pythag_30": "pythag_30",
+    "home_pythag_60": "pythag_60",
+    "home_win_pct_ewm": "win_pct_ewm",
+    "home_run_diff_ewm": "run_diff_ewm",
+    "home_pythag_ewm": "pythag_ewm",
+    "home_streak": "streak",
+    "home_sp_era": "sp_era",
+    "home_sp_k9": "sp_k9",
+    "home_sp_bb9": "sp_bb9",
+    "home_bat_woba": "bat_woba",
+    "home_bat_barrel_pct": "bat_barrel_pct",
+    "home_bat_hard_pct": "bat_hard_pct",
+    "home_pit_fip": "pit_fip",
+    "home_pit_xfip": "pit_xfip",
+    "home_pit_k_pct": "pit_k_pct",
     "home_win_pct_home_only": "win_pct_home_only",
-    "home_pythag_home_only":  "pythag_home_only",
+    "home_pythag_home_only": "pythag_home_only",
 }
 
 _AWAY_COL_MAP: dict[str, str] = {
-    "away_elo":               "elo",
-    "away_win_pct_15":        "win_pct_15",
-    "away_win_pct_30":        "win_pct_30",
-    "away_win_pct_60":        "win_pct_60",
-    "away_run_diff_15":       "run_diff_15",
-    "away_run_diff_30":       "run_diff_30",
-    "away_run_diff_60":       "run_diff_60",
-    "away_pythag_15":         "pythag_15",
-    "away_pythag_30":         "pythag_30",
-    "away_pythag_60":         "pythag_60",
-    "away_win_pct_ewm":       "win_pct_ewm",
-    "away_run_diff_ewm":      "run_diff_ewm",
-    "away_pythag_ewm":        "pythag_ewm",
-    "away_streak":            "streak",
-    "away_sp_era":            "sp_era",
-    "away_sp_k9":             "sp_k9",
-    "away_sp_bb9":            "sp_bb9",
-    "away_bat_woba":          "bat_woba",
-    "away_bat_barrel_pct":    "bat_barrel_pct",
-    "away_bat_hard_pct":      "bat_hard_pct",
-    "away_pit_fip":           "pit_fip",
-    "away_pit_xfip":          "pit_xfip",
-    "away_pit_k_pct":         "pit_k_pct",
+    "away_elo": "elo",
+    "away_win_pct_15": "win_pct_15",
+    "away_win_pct_30": "win_pct_30",
+    "away_win_pct_60": "win_pct_60",
+    "away_run_diff_15": "run_diff_15",
+    "away_run_diff_30": "run_diff_30",
+    "away_run_diff_60": "run_diff_60",
+    "away_pythag_15": "pythag_15",
+    "away_pythag_30": "pythag_30",
+    "away_pythag_60": "pythag_60",
+    "away_win_pct_ewm": "win_pct_ewm",
+    "away_run_diff_ewm": "run_diff_ewm",
+    "away_pythag_ewm": "pythag_ewm",
+    "away_streak": "streak",
+    "away_sp_era": "sp_era",
+    "away_sp_k9": "sp_k9",
+    "away_sp_bb9": "sp_bb9",
+    "away_bat_woba": "bat_woba",
+    "away_bat_barrel_pct": "bat_barrel_pct",
+    "away_bat_hard_pct": "bat_hard_pct",
+    "away_pit_fip": "pit_fip",
+    "away_pit_xfip": "pit_xfip",
+    "away_pit_k_pct": "pit_k_pct",
     "away_win_pct_away_only": "win_pct_away_only",
-    "away_pythag_away_only":  "pythag_away_only",
+    "away_pythag_away_only": "pythag_away_only",
 }
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _build_mlb_to_retro() -> dict[int, str]:
     """MLB team ID → Retrosheet code, preferring the most recent valid entry."""
@@ -173,9 +174,9 @@ def _build_team_state(features_all: pd.DataFrame) -> dict[str, dict[str, float]]
             state[key] = h_val if not np.isnan(h_val) else a_val
         # Role-specific split stats — always from the correct perspective
         state["win_pct_home_only"] = h.get("win_pct_home_only", np.nan)
-        state["pythag_home_only"]  = h.get("pythag_home_only", np.nan)
+        state["pythag_home_only"] = h.get("pythag_home_only", np.nan)
         state["win_pct_away_only"] = a.get("win_pct_away_only", np.nan)
-        state["pythag_away_only"]  = a.get("pythag_away_only", np.nan)
+        state["pythag_away_only"] = a.get("pythag_away_only", np.nan)
         merged[team] = state
     return merged
 
@@ -212,23 +213,24 @@ def _feature_hash(row: dict) -> str:
 # Main builder
 # ---------------------------------------------------------------------------
 
+
 def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
     """Build and save features_2026.parquet. Returns the resulting DataFrame."""
     if not _SCHEDULE.exists():
-        raise FileNotFoundError(f"2026 schedule not found at {_SCHEDULE}. Run ingest_schedule.py first.")
+        raise FileNotFoundError(
+            f"2026 schedule not found at {_SCHEDULE}. Run ingest_schedule.py first."
+        )
 
     # Explicitly exclude the 2026 file itself so team state is always derived
     # from historical (2000–2025) data — not from a previous pre-season estimate.
-    feature_files = sorted(
-        f for f in _FEATURES.glob("features_*.parquet") if "2026" not in f.stem
-    )
+    feature_files = sorted(f for f in _FEATURES.glob("features_*.parquet") if "2026" not in f.stem)
     if not feature_files:
         raise RuntimeError("No historical feature files found. Run build_features.py first.")
 
     log.info("Loading %d historical feature files…", len(feature_files))
     features_all = pd.concat([pd.read_parquet(f) for f in feature_files], ignore_index=True)
 
-    team_state  = _build_team_state(features_all)
+    team_state = _build_team_state(features_all)
     park_factors = _park_factor_by_home_team(features_all)
     log.info("Built end-of-season state for %d teams", len(team_state))
 
@@ -242,7 +244,9 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
 
     missing = sched[sched["home_retro"].isna() | sched["away_retro"].isna()]
     if not missing.empty:
-        log.warning("%d games have unmapped team IDs — they will use league-average features", len(missing))
+        log.warning(
+            "%d games have unmapped team IDs — they will use league-average features", len(missing)
+        )
 
     rows: list[dict] = []
     for idx, g in sched.iterrows():
@@ -251,96 +255,96 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
         h = team_state.get(h_code, {})
         a = team_state.get(a_code, {})
 
-        h_elo  = _resolve(h, "elo")
-        a_elo  = _resolve(a, "elo")
-        h_p30  = _resolve(h, "pythag_30")
-        a_p30  = _resolve(a, "pythag_30")
+        h_elo = _resolve(h, "elo")
+        a_elo = _resolve(a, "elo")
+        h_p30 = _resolve(h, "pythag_30")
+        a_p30 = _resolve(a, "pythag_30")
         h_pewm = _resolve(h, "pythag_ewm")
         a_pewm = _resolve(a, "pythag_ewm")
         h_home = _resolve(h, "win_pct_home_only")
         a_away = _resolve(a, "win_pct_away_only")
 
         row: dict = {
-            "game_pk":    int(g["game_pk"]),
-            "date":       pd.to_datetime(g["game_date_local"]).date(),
-            "season":     2026,
+            "game_pk": int(g["game_pk"]),
+            "date": pd.to_datetime(g["game_date_local"]).date(),
+            "season": 2026,
             "home_mlb_id": int(g["home_mlb_id"]),
             "away_mlb_id": int(g["away_mlb_id"]),
             "home_retro": h_code,
             "away_retro": a_code,
-            "home_win":   np.nan,
+            "home_win": np.nan,
             # Elo
-            "home_elo":          h_elo,
-            "away_elo":          a_elo,
-            "elo_diff":          h_elo - a_elo,
+            "home_elo": h_elo,
+            "away_elo": a_elo,
+            "elo_diff": h_elo - a_elo,
             # Multi-window rolling — home
-            "home_win_pct_15":   _resolve(h, "win_pct_15"),
-            "home_win_pct_30":   _resolve(h, "win_pct_30"),
-            "home_win_pct_60":   _resolve(h, "win_pct_60"),
-            "home_run_diff_15":  _resolve(h, "run_diff_15"),
-            "home_run_diff_30":  _resolve(h, "run_diff_30"),
-            "home_run_diff_60":  _resolve(h, "run_diff_60"),
-            "home_pythag_15":    _resolve(h, "pythag_15"),
-            "home_pythag_30":    h_p30,
-            "home_pythag_60":    _resolve(h, "pythag_60"),
+            "home_win_pct_15": _resolve(h, "win_pct_15"),
+            "home_win_pct_30": _resolve(h, "win_pct_30"),
+            "home_win_pct_60": _resolve(h, "win_pct_60"),
+            "home_run_diff_15": _resolve(h, "run_diff_15"),
+            "home_run_diff_30": _resolve(h, "run_diff_30"),
+            "home_run_diff_60": _resolve(h, "run_diff_60"),
+            "home_pythag_15": _resolve(h, "pythag_15"),
+            "home_pythag_30": h_p30,
+            "home_pythag_60": _resolve(h, "pythag_60"),
             # Multi-window rolling — away
-            "away_win_pct_15":   _resolve(a, "win_pct_15"),
-            "away_win_pct_30":   _resolve(a, "win_pct_30"),
-            "away_win_pct_60":   _resolve(a, "win_pct_60"),
-            "away_run_diff_15":  _resolve(a, "run_diff_15"),
-            "away_run_diff_30":  _resolve(a, "run_diff_30"),
-            "away_run_diff_60":  _resolve(a, "run_diff_60"),
-            "away_pythag_15":    _resolve(a, "pythag_15"),
-            "away_pythag_30":    a_p30,
-            "away_pythag_60":    _resolve(a, "pythag_60"),
+            "away_win_pct_15": _resolve(a, "win_pct_15"),
+            "away_win_pct_30": _resolve(a, "win_pct_30"),
+            "away_win_pct_60": _resolve(a, "win_pct_60"),
+            "away_run_diff_15": _resolve(a, "run_diff_15"),
+            "away_run_diff_30": _resolve(a, "run_diff_30"),
+            "away_run_diff_60": _resolve(a, "run_diff_60"),
+            "away_pythag_15": _resolve(a, "pythag_15"),
+            "away_pythag_30": a_p30,
+            "away_pythag_60": _resolve(a, "pythag_60"),
             # EWMA
-            "home_win_pct_ewm":  _resolve(h, "win_pct_ewm"),
-            "away_win_pct_ewm":  _resolve(a, "win_pct_ewm"),
+            "home_win_pct_ewm": _resolve(h, "win_pct_ewm"),
+            "away_win_pct_ewm": _resolve(a, "win_pct_ewm"),
             "home_run_diff_ewm": _resolve(h, "run_diff_ewm"),
             "away_run_diff_ewm": _resolve(a, "run_diff_ewm"),
-            "home_pythag_ewm":   h_pewm,
-            "away_pythag_ewm":   a_pewm,
+            "home_pythag_ewm": h_pewm,
+            "away_pythag_ewm": a_pewm,
             # Home/away performance splits
             "home_win_pct_home_only": h_home,
-            "home_pythag_home_only":  _resolve(h, "pythag_home_only"),
+            "home_pythag_home_only": _resolve(h, "pythag_home_only"),
             "away_win_pct_away_only": a_away,
-            "away_pythag_away_only":  _resolve(a, "pythag_away_only"),
+            "away_pythag_away_only": _resolve(a, "pythag_away_only"),
             # Streak and rest
-            "home_streak":       _resolve(h, "streak"),
-            "away_streak":       _resolve(a, "streak"),
-            "home_rest_days":    _OFF_SEASON_REST,
-            "away_rest_days":    _OFF_SEASON_REST,
+            "home_streak": _resolve(h, "streak"),
+            "away_streak": _resolve(a, "streak"),
+            "home_rest_days": _OFF_SEASON_REST,
+            "away_rest_days": _OFF_SEASON_REST,
             # Pitcher stats (2025 season averages as pre-season prior)
-            "home_sp_era":       _resolve(h, "sp_era"),
-            "away_sp_era":       _resolve(a, "sp_era"),
-            "home_sp_k9":        _resolve(h, "sp_k9"),
-            "away_sp_k9":        _resolve(a, "sp_k9"),
-            "home_sp_bb9":       _resolve(h, "sp_bb9"),
-            "away_sp_bb9":       _resolve(a, "sp_bb9"),
+            "home_sp_era": _resolve(h, "sp_era"),
+            "away_sp_era": _resolve(a, "sp_era"),
+            "home_sp_k9": _resolve(h, "sp_k9"),
+            "away_sp_k9": _resolve(a, "sp_k9"),
+            "home_sp_bb9": _resolve(h, "sp_bb9"),
+            "away_sp_bb9": _resolve(a, "sp_bb9"),
             # FanGraphs batting
-            "home_bat_woba":         _resolve(h, "bat_woba"),
-            "away_bat_woba":         _resolve(a, "bat_woba"),
-            "home_bat_barrel_pct":   _resolve(h, "bat_barrel_pct"),
-            "away_bat_barrel_pct":   _resolve(a, "bat_barrel_pct"),
-            "home_bat_hard_pct":     _resolve(h, "bat_hard_pct"),
-            "away_bat_hard_pct":     _resolve(a, "bat_hard_pct"),
+            "home_bat_woba": _resolve(h, "bat_woba"),
+            "away_bat_woba": _resolve(a, "bat_woba"),
+            "home_bat_barrel_pct": _resolve(h, "bat_barrel_pct"),
+            "away_bat_barrel_pct": _resolve(a, "bat_barrel_pct"),
+            "home_bat_hard_pct": _resolve(h, "bat_hard_pct"),
+            "away_bat_hard_pct": _resolve(a, "bat_hard_pct"),
             # FanGraphs pitching
-            "home_pit_fip":      _resolve(h, "pit_fip"),
-            "away_pit_fip":      _resolve(a, "pit_fip"),
-            "home_pit_xfip":     _resolve(h, "pit_xfip"),
-            "away_pit_xfip":     _resolve(a, "pit_xfip"),
-            "home_pit_k_pct":    _resolve(h, "pit_k_pct"),
-            "away_pit_k_pct":    _resolve(a, "pit_k_pct"),
+            "home_pit_fip": _resolve(h, "pit_fip"),
+            "away_pit_fip": _resolve(a, "pit_fip"),
+            "home_pit_xfip": _resolve(h, "pit_xfip"),
+            "away_pit_xfip": _resolve(a, "pit_xfip"),
+            "home_pit_k_pct": _resolve(h, "pit_k_pct"),
+            "away_pit_k_pct": _resolve(a, "pit_k_pct"),
             # Differential features
-            "pythag_diff_30":        h_p30  - a_p30,
-            "pythag_diff_ewm":       h_pewm - a_pewm,
-            "home_away_split_diff":  h_home - a_away,
-            "sp_era_diff":           _resolve(a, "sp_era")    - _resolve(h, "sp_era"),
-            "woba_diff":             _resolve(h, "bat_woba")  - _resolve(a, "bat_woba"),
-            "fip_diff":              _resolve(h, "pit_fip")   - _resolve(a, "pit_fip"),
+            "pythag_diff_30": h_p30 - a_p30,
+            "pythag_diff_ewm": h_pewm - a_pewm,
+            "home_away_split_diff": h_home - a_away,
+            "sp_era_diff": _resolve(a, "sp_era") - _resolve(h, "sp_era"),
+            "woba_diff": _resolve(h, "bat_woba") - _resolve(a, "bat_woba"),
+            "fip_diff": _resolve(h, "pit_fip") - _resolve(a, "pit_fip"),
             # Park and context
-            "park_run_factor":   park_factors.get(h_code, 1.0),
-            "season_progress":   int(idx) / max(n_games - 1, 1),
+            "park_run_factor": park_factors.get(h_code, 1.0),
+            "season_progress": int(idx) / max(n_games - 1, 1),
         }
         row["feature_hash"] = _feature_hash(row)
         rows.append(row)

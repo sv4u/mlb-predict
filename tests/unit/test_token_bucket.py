@@ -1,18 +1,14 @@
 """Tests for winprob.mlbapi.client.TokenBucket."""
+
 from __future__ import annotations
 
 import asyncio
 import time
 from typing import TYPE_CHECKING
 
-import pytest
 
 if TYPE_CHECKING:
-    from _pytest.capture import CaptureFixture
-    from _pytest.fixtures import FixtureRequest
-    from _pytest.logging import LogCaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
-    from pytest_mock.plugin import MockerFixture
+    pass
 
 from winprob.mlbapi.client import TokenBucket
 

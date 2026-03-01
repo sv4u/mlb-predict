@@ -29,10 +29,9 @@ def compute_park_factors(gamelogs_all: pd.DataFrame) -> dict[str, float]:
         Missing parks default to 1.0 at lookup time.
     """
     gl = gamelogs_all.copy()
-    gl["total_runs"] = (
-        pd.to_numeric(gl["home_score"], errors="coerce").fillna(0)
-        + pd.to_numeric(gl["visiting_score"], errors="coerce").fillna(0)
-    )
+    gl["total_runs"] = pd.to_numeric(gl["home_score"], errors="coerce").fillna(0) + pd.to_numeric(
+        gl["visiting_score"], errors="coerce"
+    ).fillna(0)
 
     park_stats = (
         gl.groupby("park_id")

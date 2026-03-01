@@ -1,7 +1,7 @@
 """Tests for winprob.mlbapi.teams."""
+
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
@@ -9,13 +9,9 @@ import pandas as pd
 import pytest
 
 if TYPE_CHECKING:
-    from _pytest.capture import CaptureFixture
-    from _pytest.fixtures import FixtureRequest
-    from _pytest.logging import LogCaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
-    from pytest_mock.plugin import MockerFixture
+    pass
 
-from winprob.mlbapi.teams import TeamMaps, build_team_maps, get_teams_df
+from winprob.mlbapi.teams import build_team_maps, get_teams_df
 
 
 # ---------------------------------------------------------------------------

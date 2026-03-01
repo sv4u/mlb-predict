@@ -37,7 +37,12 @@ async def ingest_season(
         df.to_parquet(out_path, index=False)
         starters = (df["games_started"] > 0).sum()
         logger.info("%d: %d pitchers (%d starters) → %s", season, len(df), starters, out_path)
-        return {"season": season, "status": "ok", "n_pitchers": len(df), "n_starters": int(starters)}
+        return {
+            "season": season,
+            "status": "ok",
+            "n_pitchers": len(df),
+            "n_starters": int(starters),
+        }
     except Exception as exc:
         logger.error("%d: FAILED — %s", season, exc)
         return {"season": season, "status": "failed", "error": str(exc)}

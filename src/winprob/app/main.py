@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Annotated
 
-import numpy as np
 import pandas as pd
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -34,6 +32,7 @@ app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 @app.on_event("startup")
 async def _startup() -> None:
     import os
+
     model_type = os.environ.get("WINPROB_MODEL_TYPE", "logistic")
     startup(model_type)
 
@@ -41,6 +40,7 @@ async def _startup() -> None:
 # ---------------------------------------------------------------------------
 # API endpoints
 # ---------------------------------------------------------------------------
+
 
 @app.get("/api/seasons")
 def api_seasons() -> list[int]:
@@ -102,9 +102,7 @@ def api_games(
                 "away_retro": str(r.get("away_retro", "")),
                 "away_name": TEAM_NAMES.get(str(r.get("away_retro", "")), ""),
                 "prob_home": round(float(r["prob"]), 4) if pd.notna(r.get("prob")) else None,
-                "home_win": (
-                    int(r["home_win"]) if pd.notna(r.get("home_win")) else None
-                ),
+                "home_win": (int(r["home_win"]) if pd.notna(r.get("home_win")) else None),
                 "home_elo": round(float(r["home_elo"]), 1) if pd.notna(r.get("home_elo")) else None,
                 "away_elo": round(float(r["away_elo"]), 1) if pd.notna(r.get("away_elo")) else None,
             }
@@ -114,7 +112,7 @@ def api_games(
 
 
 @app.get("/api/games/{game_pk}")
-def api_game_detail(game_pk: int) -> dict:
+def api_game_detail(game_pk: int) -> dict | JSONResponse:
     """Full feature breakdown + SHAP attribution for a single game."""
     df = get_features()
     matches = df[df["game_pk"] == game_pk]
@@ -127,7 +125,6 @@ def api_game_detail(game_pk: int) -> dict:
     # SHAP attribution
     shap_vals: dict[str, float] = {}
     try:
-        from winprob.app.data_cache import _model
         base = getattr(model, "base", model)
         x = row[feature_cols].values.astype(float)
         if hasattr(base, "named_steps"):  # logistic
@@ -139,6 +136,7 @@ def api_game_detail(game_pk: int) -> dict:
             shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, shap_arr)}
         elif hasattr(base, "booster_") or hasattr(base, "get_booster"):
             import shap
+
             X_df = pd.DataFrame([x], columns=feature_cols)
             explainer = shap.TreeExplainer(base)
             sv = explainer.shap_values(X_df)
@@ -146,17 +144,23 @@ def api_game_detail(game_pk: int) -> dict:
             shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, arr)}
     except Exception as exc:
         import logging
-        logging.getLogger(__name__).warning("SHAP attribution failed for game_pk=%d: %s", game_pk, exc)
+
+        logging.getLogger(__name__).warning(
+            "SHAP attribution failed for game_pk=%d: %s", game_pk, exc
+        )
 
     # Top SHAP factors (sorted by absolute value)
     top_factors = sorted(
         [{"feature": k, "value": v} for k, v in shap_vals.items()],
-        key=lambda x: abs(x["value"]),
+        key=lambda x: abs(x["value"]),  # type: ignore[arg-type]
         reverse=True,
     )[:12]
 
-    stats = {k: (round(float(v), 4) if pd.notna(v) else None) for k, v in row.items()
-             if k in feature_cols}
+    stats = {
+        k: (round(float(v), 4) if pd.notna(v) else None)
+        for k, v in row.items()
+        if k in feature_cols
+    }
 
     return {
         "game_pk": game_pk,
@@ -192,26 +196,29 @@ def api_upsets(
     has_result = df[df["home_win"].notna() & df["prob"].notna()].copy()
     has_result["fav_home"] = has_result["prob"] >= 0.5
     has_result["fav_prob"] = has_result["prob"].clip(lower=0.5)
-    has_result.loc[~has_result["fav_home"], "fav_prob"] = 1 - has_result.loc[~has_result["fav_home"], "prob"]
+    has_result.loc[~has_result["fav_home"], "fav_prob"] = (
+        1 - has_result.loc[~has_result["fav_home"], "prob"]
+    )
     has_result = has_result[has_result["fav_prob"] >= min_prob]
-    has_result["upset"] = (
-        (has_result["fav_home"] & (has_result["home_win"] == 0))
-        | (~has_result["fav_home"] & (has_result["home_win"] == 1))
+    has_result["upset"] = (has_result["fav_home"] & (has_result["home_win"] == 0)) | (
+        ~has_result["fav_home"] & (has_result["home_win"] == 1)
     )
     upsets = has_result[has_result["upset"]].nlargest(limit, "fav_prob")
     result = []
     for _, r in upsets.iterrows():
-        result.append({
-            "game_pk": int(r.get("game_pk", 0) or 0),
-            "date": str(r.get("date", ""))[:10],
-            "season": int(r.get("season", 0) or 0),
-            "home_name": TEAM_NAMES.get(str(r.get("home_retro", "")), ""),
-            "away_name": TEAM_NAMES.get(str(r.get("away_retro", "")), ""),
-            "prob_home": round(float(r["prob"]), 4),
-            "fav_prob": round(float(r["fav_prob"]), 4),
-            "fav_team": "home" if r["fav_home"] else "away",
-            "winner": "home" if r["home_win"] == 1 else "away",
-        })
+        result.append(
+            {
+                "game_pk": int(r.get("game_pk", 0) or 0),
+                "date": str(r.get("date", ""))[:10],
+                "season": int(r.get("season", 0) or 0),
+                "home_name": TEAM_NAMES.get(str(r.get("home_retro", "")), ""),
+                "away_name": TEAM_NAMES.get(str(r.get("away_retro", "")), ""),
+                "prob_home": round(float(r["prob"]), 4),
+                "fav_prob": round(float(r["fav_prob"]), 4),
+                "fav_team": "home" if r["fav_home"] else "away",
+                "winner": "home" if r["home_win"] == 1 else "away",
+            }
+        )
     return result
 
 
@@ -219,6 +226,7 @@ def api_upsets(
 def api_cv_summary() -> list[dict]:
     """Return cross-validation results from the latest training run."""
     import json
+
     paths = [
         Path("data/models/cv_summary_v3.json"),
         Path("data/models/cv_summary_v2.json"),
@@ -233,6 +241,7 @@ def api_cv_summary() -> list[dict]:
 # ---------------------------------------------------------------------------
 # HTML pages
 # ---------------------------------------------------------------------------
+
 
 @app.get("/", response_class=HTMLResponse)
 async def page_home(request: Request):

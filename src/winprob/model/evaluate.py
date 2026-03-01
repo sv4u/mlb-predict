@@ -18,10 +18,10 @@ class EvalResult:
     """Bundle of evaluation metrics for one model on one dataset."""
 
     n_games: int
-    brier_score: float         # Lower is better; perfect calibration = 0
-    log_loss: float            # Lower is better
-    accuracy: float            # Fraction of games where predicted winner was correct
-    mean_pred_prob: float      # Sanity check: should be ~0.54 (home-field bias)
+    brier_score: float  # Lower is better; perfect calibration = 0
+    log_loss: float  # Lower is better
+    accuracy: float  # Fraction of games where predicted winner was correct
+    mean_pred_prob: float  # Sanity check: should be ~0.54 (home-field bias)
     calibration_mean_err: float  # Mean absolute calibration error across 10 bins
 
 

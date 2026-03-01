@@ -27,28 +27,42 @@ _feature_cols: list[str] = []
 
 # Retrosheet code → full name
 TEAM_NAMES: dict[str, str] = {
-    "ARI": "Arizona Diamondbacks",   "ATL": "Atlanta Braves",
-    "BAL": "Baltimore Orioles",      "BOS": "Boston Red Sox",
-    "CHA": "Chicago White Sox",      "CHN": "Chicago Cubs",
-    "CIN": "Cincinnati Reds",        "CLE": "Cleveland Guardians",
-    "COL": "Colorado Rockies",       "DET": "Detroit Tigers",
-    "HOU": "Houston Astros",         "KCA": "Kansas City Royals",
-    "LAN": "Los Angeles Dodgers",    "MIA": "Miami Marlins",
-    "MIL": "Milwaukee Brewers",      "MIN": "Minnesota Twins",
-    "NYA": "New York Yankees",       "NYN": "New York Mets",
-    "OAK": "Oakland Athletics",      "PHI": "Philadelphia Phillies",
-    "PIT": "Pittsburgh Pirates",     "SDN": "San Diego Padres",
-    "SEA": "Seattle Mariners",       "SFN": "San Francisco Giants",
-    "SLN": "St. Louis Cardinals",    "TBA": "Tampa Bay Rays",
-    "TEX": "Texas Rangers",          "TOR": "Toronto Blue Jays",
-    "WAS": "Washington Nationals",   "ANA": "Los Angeles Angels",
-    "ATH": "Athletics",              "FLO": "Florida Marlins",
+    "ARI": "Arizona Diamondbacks",
+    "ATL": "Atlanta Braves",
+    "BAL": "Baltimore Orioles",
+    "BOS": "Boston Red Sox",
+    "CHA": "Chicago White Sox",
+    "CHN": "Chicago Cubs",
+    "CIN": "Cincinnati Reds",
+    "CLE": "Cleveland Guardians",
+    "COL": "Colorado Rockies",
+    "DET": "Detroit Tigers",
+    "HOU": "Houston Astros",
+    "KCA": "Kansas City Royals",
+    "LAN": "Los Angeles Dodgers",
+    "MIA": "Miami Marlins",
+    "MIL": "Milwaukee Brewers",
+    "MIN": "Minnesota Twins",
+    "NYA": "New York Yankees",
+    "NYN": "New York Mets",
+    "OAK": "Oakland Athletics",
+    "PHI": "Philadelphia Phillies",
+    "PIT": "Pittsburgh Pirates",
+    "SDN": "San Diego Padres",
+    "SEA": "Seattle Mariners",
+    "SFN": "San Francisco Giants",
+    "SLN": "St. Louis Cardinals",
+    "TBA": "Tampa Bay Rays",
+    "TEX": "Texas Rangers",
+    "TOR": "Toronto Blue Jays",
+    "WAS": "Washington Nationals",
+    "ANA": "Los Angeles Angels",
+    "ATH": "Athletics",
+    "FLO": "Florida Marlins",
     "MON": "Montreal Expos",
 }
 
-TEAM_ABBREVS: dict[str, str] = {
-    v: k for k, v in TEAM_NAMES.items()
-}  # name → retro code
+TEAM_ABBREVS: dict[str, str] = {v: k for k, v in TEAM_NAMES.items()}  # name → retro code
 
 
 def startup(model_type: str = "logistic") -> None:
@@ -57,8 +71,7 @@ def startup(model_type: str = "logistic") -> None:
 
     logger.info("Loading feature data…")
     frames = [
-        pd.read_parquet(f)
-        for f in sorted((_PROCESSED_DIR / "features").glob("features_*.parquet"))
+        pd.read_parquet(f) for f in sorted((_PROCESSED_DIR / "features").glob("features_*.parquet"))
     ]
     if not frames:
         raise RuntimeError("No feature files found.  Run build_features.py first.")

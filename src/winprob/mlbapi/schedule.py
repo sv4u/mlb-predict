@@ -25,13 +25,28 @@ SCHEDULE_FIELDS_MIN = ",".join(
 
 # Columns guaranteed to be present in a normalized schedule DataFrame.
 _SCHEDULE_COLS = [
-    "game_pk", "game_date_utc", "game_date_local", "home_mlb_id", "away_mlb_id",
-    "venue_id", "local_timezone", "double_header", "game_number", "status",
+    "game_pk",
+    "game_date_utc",
+    "game_date_local",
+    "home_mlb_id",
+    "away_mlb_id",
+    "venue_id",
+    "local_timezone",
+    "double_header",
+    "game_number",
+    "status",
 ]
 
 
-async def schedule_bounds_regular_season(client: MLBAPIClient, *, season: int, sport_id: int = 1) -> tuple[date, date]:
-    params: Mapping[str, Any] = {"sportId": sport_id, "season": season, "gameType": "R", "fields": "dates,date"}
+async def schedule_bounds_regular_season(
+    client: MLBAPIClient, *, season: int, sport_id: int = 1
+) -> tuple[date, date]:
+    params: Mapping[str, Any] = {
+        "sportId": sport_id,
+        "season": season,
+        "gameType": "R",
+        "fields": "dates,date",
+    }
     raw = await client.get_json("schedule", params)
     ds = [d.get("date") for d in raw.get("dates", []) if d.get("date")]
     if not ds:
@@ -84,8 +99,23 @@ def normalize_schedule(raw: dict[str, Any]) -> pd.DataFrame:
     return df
 
 
-async def fetch_schedule_chunk(client: MLBAPIClient, *, season: int, start_date: date, end_date: date, sport_id: int = 1, fields: str = SCHEDULE_FIELDS_MIN) -> pd.DataFrame:
-    params: Mapping[str, Any] = {"sportId": sport_id, "season": season, "gameType": "R", "startDate": start_date.isoformat(), "endDate": end_date.isoformat(), "fields": fields}
+async def fetch_schedule_chunk(
+    client: MLBAPIClient,
+    *,
+    season: int,
+    start_date: date,
+    end_date: date,
+    sport_id: int = 1,
+    fields: str = SCHEDULE_FIELDS_MIN,
+) -> pd.DataFrame:
+    params: Mapping[str, Any] = {
+        "sportId": sport_id,
+        "season": season,
+        "gameType": "R",
+        "startDate": start_date.isoformat(),
+        "endDate": end_date.isoformat(),
+        "fields": fields,
+    }
     raw = await client.get_json("schedule", params)
     return normalize_schedule(raw)
 

@@ -88,7 +88,11 @@ def build_pitcher_stats(gamelogs: pd.DataFrame) -> pd.DataFrame:
         )
 
     _gb = combined.groupby("pitcher_id", group_keys=False)
-    _kw = {"include_groups": True} if "include_groups" in inspect.signature(_gb.apply).parameters else {}
+    _kw = (
+        {"include_groups": True}
+        if "include_groups" in inspect.signature(_gb.apply).parameters
+        else {}
+    )
     stats = _gb.apply(_pitcher_group, **_kw)
 
     home_s = (

@@ -23,7 +23,14 @@ async def get_teams_df(client: MLBAPIClient, *, season: int, sport_id: int = 1) 
     raw = await client.get_json("teams", params)
     rows: list[dict[str, Any]] = []
     for t in raw.get("teams", []):
-        rows.append({"season": season, "mlb_team_id": t.get("id"), "abbrev": t.get("abbreviation"), "name": t.get("name")})
+        rows.append(
+            {
+                "season": season,
+                "mlb_team_id": t.get("id"),
+                "abbrev": t.get("abbreviation"),
+                "name": t.get("name"),
+            }
+        )
     if not rows:
         return pd.DataFrame(columns=_TEAMS_COLS)
     df = pd.DataFrame(rows).dropna(subset=["mlb_team_id"])

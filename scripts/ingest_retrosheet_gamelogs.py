@@ -10,7 +10,9 @@ from winprob.retrosheet.gamelogs import RetrosheetGLSource, download_gamelog_txt
 from winprob.util.hashing import sha256_file
 
 
-async def ingest_one(season: int, *, refresh: bool, primary_source: str, enable_fallback: bool) -> dict:
+async def ingest_one(
+    season: int, *, refresh: bool, primary_source: str, enable_fallback: bool
+) -> dict:
     raw_path = Path("data/raw/retrosheet/gamelogs") / f"GL{season}.TXT"
     meta = await download_gamelog_txt(
         season=season,
@@ -39,7 +41,9 @@ async def ingest_one(season: int, *, refresh: bool, primary_source: str, enable_
         "url_used": meta.get("url_used"),
         "fallback_reason": meta.get("fallback_reason"),
     }
-    (out_dir / f"gamelogs_{season}.checksum.json").write_text(pd.Series(checksum).to_json(), encoding="utf-8")
+    (out_dir / f"gamelogs_{season}.checksum.json").write_text(
+        pd.Series(checksum).to_json(), encoding="utf-8"
+    )
     return checksum
 
 
@@ -55,13 +59,22 @@ async def main() -> None:
     results = []
     for s in seasons:
         try:
-            results.append(await ingest_one(s, refresh=args.refresh, primary_source=args.primary_source, enable_fallback=not args.no_fallback))
+            results.append(
+                await ingest_one(
+                    s,
+                    refresh=args.refresh,
+                    primary_source=args.primary_source,
+                    enable_fallback=not args.no_fallback,
+                )
+            )
         except Exception as e:
             results.append({"season": s, "status": "failed", "error": str(e)})
 
     out = Path("data/processed/retrosheet")
     out.mkdir(parents=True, exist_ok=True)
-    (out / "ingest_gamelogs_summary.json").write_text(pd.DataFrame(results).to_json(orient="records", indent=2), encoding="utf-8")
+    (out / "ingest_gamelogs_summary.json").write_text(
+        pd.DataFrame(results).to_json(orient="records", indent=2), encoding="utf-8"
+    )
 
 
 if __name__ == "__main__":

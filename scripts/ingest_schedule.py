@@ -11,7 +11,11 @@ import pandas as pd
 from zoneinfo import ZoneInfo
 
 from winprob.mlbapi.client import MLBAPIClient, MLBAPIConfig
-from winprob.mlbapi.schedule import fetch_schedule_chunk, parse_utc_iso, schedule_bounds_regular_season
+from winprob.mlbapi.schedule import (
+    fetch_schedule_chunk,
+    parse_utc_iso,
+    schedule_bounds_regular_season,
+)
 from winprob.mlbapi.teams import build_team_maps, get_teams_df
 from winprob.util.hashing import sha256_aggregate_of_files, sha256_file
 
@@ -20,26 +24,69 @@ def month_ranges(start: date, end: date) -> list[tuple[date, date]]:
     ranges: list[tuple[date, date]] = []
     cur = date(start.year, start.month, 1)
     while cur <= end:
-        nxt = date(cur.year + (1 if cur.month == 12 else 0), 1 if cur.month == 12 else cur.month + 1, 1)
+        nxt = date(
+            cur.year + (1 if cur.month == 12 else 0), 1 if cur.month == 12 else cur.month + 1, 1
+        )
         ranges.append((max(start, cur), min(end, nxt - timedelta(days=1))))
         cur = nxt
     return ranges
 
 
-async def fetch_with_adaptive_split(client: MLBAPIClient, *, season: int, start: date, end: date, max_mb: int, max_depth: int, depth: int = 0) -> pd.DataFrame:
+async def fetch_with_adaptive_split(
+    client: MLBAPIClient,
+    *,
+    season: int,
+    start: date,
+    end: date,
+    max_mb: int,
+    max_depth: int,
+    depth: int = 0,
+) -> pd.DataFrame:
     span_days = (end - start).days + 1
     if span_days > 31 and depth < max_depth:
         mid = start + timedelta(days=span_days // 2)
-        left = await fetch_with_adaptive_split(client, season=season, start=start, end=mid, max_mb=max_mb, max_depth=max_depth, depth=depth + 1)
-        right = await fetch_with_adaptive_split(client, season=season, start=mid + timedelta(days=1), end=end, max_mb=max_mb, max_depth=max_depth, depth=depth + 1)
+        left = await fetch_with_adaptive_split(
+            client,
+            season=season,
+            start=start,
+            end=mid,
+            max_mb=max_mb,
+            max_depth=max_depth,
+            depth=depth + 1,
+        )
+        right = await fetch_with_adaptive_split(
+            client,
+            season=season,
+            start=mid + timedelta(days=1),
+            end=end,
+            max_mb=max_mb,
+            max_depth=max_depth,
+            depth=depth + 1,
+        )
         return pd.concat([left, right], ignore_index=True)
 
     df = await fetch_schedule_chunk(client, season=season, start_date=start, end_date=end)
     approx_bytes = df.memory_usage(deep=True).sum()
     if approx_bytes > max_mb * 1024 * 1024 and depth < max_depth and span_days > 1:
         mid = start + timedelta(days=span_days // 2)
-        left = await fetch_with_adaptive_split(client, season=season, start=start, end=mid, max_mb=max_mb, max_depth=max_depth, depth=depth + 1)
-        right = await fetch_with_adaptive_split(client, season=season, start=mid + timedelta(days=1), end=end, max_mb=max_mb, max_depth=max_depth, depth=depth + 1)
+        left = await fetch_with_adaptive_split(
+            client,
+            season=season,
+            start=start,
+            end=mid,
+            max_mb=max_mb,
+            max_depth=max_depth,
+            depth=depth + 1,
+        )
+        right = await fetch_with_adaptive_split(
+            client,
+            season=season,
+            start=mid + timedelta(days=1),
+            end=end,
+            max_mb=max_mb,
+            max_depth=max_depth,
+            depth=depth + 1,
+        )
         return pd.concat([left, right], ignore_index=True)
 
     return df
@@ -59,9 +106,14 @@ def add_local_times(df: pd.DataFrame) -> pd.DataFrame:
 
     # Prefer the local date already set by normalize_schedule; only compute
     # from local_timezone for rows where game_date_local is still missing.
-    missing_local = out["game_date_local"].isna() if "game_date_local" in out.columns else pd.Series(True, index=out.index)
+    missing_local = (
+        out["game_date_local"].isna()
+        if "game_date_local" in out.columns
+        else pd.Series(True, index=out.index)
+    )
 
     if missing_local.any():
+
         def to_local(row: Any) -> str | None:
             tz = row["local_timezone"]
             if not tz:
@@ -79,7 +131,9 @@ def add_local_times(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-async def ingest_one_season(*, season: int, refresh_mlbapi: bool, max_mb: int, max_depth: int) -> dict[str, Any]:
+async def ingest_one_season(
+    *, season: int, refresh_mlbapi: bool, max_mb: int, max_depth: int
+) -> dict[str, Any]:
     cfg = MLBAPIConfig(rps=5.0, burst=10.0, max_concurrency=8)
     async with MLBAPIClient(config=cfg, refresh=refresh_mlbapi) as client:
         teams_df = await get_teams_df(client, season=season)
@@ -87,8 +141,12 @@ async def ingest_one_season(*, season: int, refresh_mlbapi: bool, max_mb: int, m
 
         start, end = await schedule_bounds_regular_season(client, season=season)
         dfs = []
-        for (cs, ce) in month_ranges(start, end):
-            dfs.append(await fetch_with_adaptive_split(client, season=season, start=cs, end=ce, max_mb=max_mb, max_depth=max_depth))
+        for cs, ce in month_ranges(start, end):
+            dfs.append(
+                await fetch_with_adaptive_split(
+                    client, season=season, start=cs, end=ce, max_mb=max_mb, max_depth=max_depth
+                )
+            )
         df = pd.concat(dfs, ignore_index=True)
 
     # When a game is rescheduled (common in 2020) the same game_pk appears in
@@ -133,7 +191,9 @@ async def ingest_one_season(*, season: int, refresh_mlbapi: bool, max_mb: int, m
         "max_split_depth": max_depth,
         "mlbapi_config": asdict(cfg),
     }
-    (out_dir / f"games_{season}.checksum.json").write_text(pd.Series(checksum).to_json(), encoding="utf-8")
+    (out_dir / f"games_{season}.checksum.json").write_text(
+        pd.Series(checksum).to_json(), encoding="utf-8"
+    )
     return checksum
 
 
@@ -149,13 +209,22 @@ async def main() -> None:
     results = []
     for s in seasons:
         try:
-            results.append(await ingest_one_season(season=s, refresh_mlbapi=args.refresh_mlbapi, max_mb=args.max_response_mb, max_depth=args.max_split_depth))
+            results.append(
+                await ingest_one_season(
+                    season=s,
+                    refresh_mlbapi=args.refresh_mlbapi,
+                    max_mb=args.max_response_mb,
+                    max_depth=args.max_split_depth,
+                )
+            )
         except Exception as e:
             results.append({"season": s, "status": "failed", "error": str(e)})
 
     out_dir = Path("data/processed/schedule")
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "ingest_schedule_summary.json").write_text(pd.DataFrame(results).to_json(orient="records", indent=2), encoding="utf-8")
+    (out_dir / "ingest_schedule_summary.json").write_text(
+        pd.DataFrame(results).to_json(orient="records", indent=2), encoding="utf-8"
+    )
 
 
 if __name__ == "__main__":

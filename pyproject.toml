@@ -43,6 +43,7 @@ dev = [
   "pytest-mock>=3.12",
   "hypothesis>=6.0",
   "aioresponses>=0.7",
+  "types-aiofiles>=23.2",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -52,10 +53,16 @@ packages = ["src/winprob"]
 line-length = 100
 target-version = "py311"
 
+[tool.mypy]
+python_version = "3.11"
+# ML / data-science libraries (lightgbm, xgboost, shap, pybaseball) ship
+# incomplete or no stubs — suppress the resulting "cannot find implementation"
+# errors so the type check stays useful without generating noise.
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_return_any = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-filterwarnings = [
-  # pandas 2.2+ deprecation: groupby apply include_groups default changing in future
-  "ignore:DataFrameGroupBy.apply operated on the grouping columns:FutureWarning",
-]
+filterwarnings = []

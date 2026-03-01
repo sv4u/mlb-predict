@@ -1,4 +1,5 @@
 """Tests for winprob.crosswalk.build."""
+
 from __future__ import annotations
 
 import datetime
@@ -6,17 +7,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
-import pytest
 
 if TYPE_CHECKING:
-    from _pytest.capture import CaptureFixture
-    from _pytest.fixtures import FixtureRequest
-    from _pytest.logging import LogCaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
-    from pytest_mock.plugin import MockerFixture
+    pass
 
 from winprob.crosswalk.build import CrosswalkResult, _prep_schedule, build_crosswalk
-from winprob.ingest.id_map import RetroTeamMap, load_retro_team_map
+from winprob.ingest.id_map import load_retro_team_map
 
 
 # ---------------------------------------------------------------------------
@@ -110,8 +106,16 @@ def test_build_crosswalk_output_columns(retro_team_map_csv: Path) -> None:
     result = build_crosswalk(season=2024, schedule=sched, gamelogs=logs, retro_team_map=retro_map)
 
     expected_cols = {
-        "date", "home_mlb_id", "away_mlb_id", "home_retro", "away_retro",
-        "dh_game_num", "status", "mlb_game_pk", "match_confidence", "notes",
+        "date",
+        "home_mlb_id",
+        "away_mlb_id",
+        "home_retro",
+        "away_retro",
+        "dh_game_num",
+        "status",
+        "mlb_game_pk",
+        "match_confidence",
+        "notes",
     }
     assert expected_cols.issubset(set(result.df.columns))
 
@@ -134,7 +138,9 @@ def test_build_crosswalk_returns_crosswalk_result(retro_team_map_csv: Path) -> N
 def test_build_crosswalk_matched_unique(retro_team_map_csv: Path) -> None:
     """A game present in both datasets with a unique game_pk must be 'matched'."""
     retro_map = load_retro_team_map(retro_team_map_csv)
-    sched = _make_schedule({"game_pk": 745803, "home_mlb_id": 111, "away_mlb_id": 133, "game_number": 1})
+    sched = _make_schedule(
+        {"game_pk": 745803, "home_mlb_id": 111, "away_mlb_id": 133, "game_number": 1}
+    )
     logs = _make_gamelogs({"home_team": "BOS", "visiting_team": "OAK", "game_num": 0})
 
     result = build_crosswalk(season=2024, schedule=sched, gamelogs=logs, retro_team_map=retro_map)
@@ -169,8 +175,20 @@ def test_build_crosswalk_doubleheader_disambiguation(retro_team_map_csv: Path) -
     """Two DH games must be matched by game_num vs game_number."""
     retro_map = load_retro_team_map(retro_team_map_csv)
     sched = _make_schedule(
-        {"game_pk": 100, "home_mlb_id": 111, "away_mlb_id": 133, "game_number": 1, "game_date_utc": "2024-04-01T17:10:00Z"},
-        {"game_pk": 101, "home_mlb_id": 111, "away_mlb_id": 133, "game_number": 2, "game_date_utc": "2024-04-01T20:10:00Z"},
+        {
+            "game_pk": 100,
+            "home_mlb_id": 111,
+            "away_mlb_id": 133,
+            "game_number": 1,
+            "game_date_utc": "2024-04-01T17:10:00Z",
+        },
+        {
+            "game_pk": 101,
+            "home_mlb_id": 111,
+            "away_mlb_id": 133,
+            "game_number": 2,
+            "game_date_utc": "2024-04-01T20:10:00Z",
+        },
     )
     # Gamelog game_num=2 should match schedule game_number=2
     logs = _make_gamelogs(
@@ -196,8 +214,18 @@ def test_build_crosswalk_coverage_pct_all_matched(retro_team_map_csv: Path) -> N
     """Coverage must be 100.0 when every game is matched."""
     retro_map = load_retro_team_map(retro_team_map_csv)
     sched = _make_schedule(
-        {"game_pk": 1, "home_mlb_id": 111, "away_mlb_id": 133, "game_date_utc": "2024-04-01T17:10:00Z"},
-        {"game_pk": 2, "home_mlb_id": 116, "away_mlb_id": 145, "game_date_utc": "2024-04-01T19:00:00Z"},
+        {
+            "game_pk": 1,
+            "home_mlb_id": 111,
+            "away_mlb_id": 133,
+            "game_date_utc": "2024-04-01T17:10:00Z",
+        },
+        {
+            "game_pk": 2,
+            "home_mlb_id": 116,
+            "away_mlb_id": 145,
+            "game_date_utc": "2024-04-01T19:00:00Z",
+        },
     )
     logs = _make_gamelogs(
         {"home_team": "BOS", "visiting_team": "OAK", "date": datetime.date(2024, 4, 1)},
@@ -244,8 +272,9 @@ def test_build_crosswalk_empty_gamelogs(retro_team_map_csv: Path) -> None:
     """An empty gamelogs DataFrame must produce an empty result with 100% coverage."""
     retro_map = load_retro_team_map(retro_team_map_csv)
     sched = _make_schedule({"game_pk": 1})
-    logs = pd.DataFrame(columns=["date", "game_num", "visiting_team", "home_team",
-                                  "visiting_score", "home_score"])
+    logs = pd.DataFrame(
+        columns=["date", "game_num", "visiting_team", "home_team", "visiting_score", "home_score"]
+    )
 
     result = build_crosswalk(season=2024, schedule=sched, gamelogs=logs, retro_team_map=retro_map)
     assert len(result.df) == 0

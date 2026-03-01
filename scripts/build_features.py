@@ -40,7 +40,9 @@ def main() -> None:
 
     print("Loading all gamelogs for cross-season Elo and rolling stats…")
     gamelogs_all = load_all_gamelogs(args.processed_dir)
-    print(f"  {len(gamelogs_all):,} game rows across {gamelogs_all['date'].dt.year.nunique()} seasons")
+    print(
+        f"  {len(gamelogs_all):,} game rows across {gamelogs_all['date'].dt.year.nunique()} seasons"
+    )
 
     print("Computing park factors from all available gamelogs…")
     park_factors = load_or_build_park_factors(args.processed_dir)
@@ -70,7 +72,7 @@ def main() -> None:
             # Prior-season FanGraphs advanced team metrics
             fg_map_prior = load_fg_team_map(fg_dir, s - 1)
             if fg_map_prior:
-                print(f"  {s}: {len(fg_map_prior)} FG team priors from {s-1}")
+                print(f"  {s}: {len(fg_map_prior)} FG team priors from {s - 1}")
 
             df = build_feature_matrix(
                 season=s,
@@ -86,9 +88,12 @@ def main() -> None:
             df.to_parquet(out_path, index=False)
             n_outcome = int(df["home_win"].notna().sum())
             print(f"  {s}: {len(df)} games, {n_outcome} with outcome → {out_path}")
-            results.append({"season": s, "status": "ok", "n_games": len(df), "n_with_outcome": n_outcome})
+            results.append(
+                {"season": s, "status": "ok", "n_games": len(df), "n_with_outcome": n_outcome}
+            )
         except Exception as exc:
             import traceback
+
             print(f"  {s}: FAILED — {exc}")
             traceback.print_exc()
             results.append({"season": s, "status": "failed", "error": str(exc)})

@@ -20,7 +20,9 @@ class RetroTeamMap:
         return int(m.iloc[0]["mlb_team_id"])
 
 
-def load_retro_team_map(path: Path = Path("data/processed/team_id_map_retro_to_mlb.csv")) -> RetroTeamMap:
+def load_retro_team_map(
+    path: Path = Path("data/processed/team_id_map_retro_to_mlb.csv"),
+) -> RetroTeamMap:
     df = pd.read_csv(path)
     required = {"retro_team_code", "mlb_team_id", "valid_from_season", "valid_to_season"}
     missing = required - set(df.columns)

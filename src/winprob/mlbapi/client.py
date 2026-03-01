@@ -11,9 +11,9 @@ import aiofiles
 import aiohttp
 
 try:
-    import orjson as jsonlib  # type: ignore
+    import orjson as jsonlib  # type: ignore[import-untyped,unused-ignore]
 except Exception:  # pragma: no cover
-    import json as jsonlib  # type: ignore
+    import json as jsonlib  # type: ignore[no-redef]
 
 
 class MLBAPIError(RuntimeError):
@@ -165,23 +165,48 @@ class MLBAPIClient:
 
                         if resp.status == 429:
                             retry_after = resp.headers.get("Retry-After")
-                            await asyncio.sleep(float(retry_after) if retry_after else min(self._cfg.backoff_max_s, self._cfg.backoff_base_s * (2 ** (attempt - 1))))
+                            await asyncio.sleep(
+                                float(retry_after)
+                                if retry_after
+                                else min(
+                                    self._cfg.backoff_max_s,
+                                    self._cfg.backoff_base_s * (2 ** (attempt - 1)),
+                                )
+                            )
                             last_err = MLBRateLimitError(f"429 for {url}")
                             continue
 
                         if 500 <= resp.status <= 599:
-                            await asyncio.sleep(min(self._cfg.backoff_max_s, self._cfg.backoff_base_s * (2 ** (attempt - 1))))
+                            await asyncio.sleep(
+                                min(
+                                    self._cfg.backoff_max_s,
+                                    self._cfg.backoff_base_s * (2 ** (attempt - 1)),
+                                )
+                            )
                             last_err = MLBAPIError(f"{resp.status} for {url}")
                             continue
 
                         resp.raise_for_status()
                         payload = await resp.json()
-                        meta = {"ts_unix": time.time(), "url": url, "params": dict(params), "cache_key": key, "endpoint": endpoint, "status": resp.status}
+                        meta = {
+                            "ts_unix": time.time(),
+                            "url": url,
+                            "params": dict(params),
+                            "cache_key": key,
+                            "endpoint": endpoint,
+                            "status": resp.status,
+                        }
                         await self._write_cache(cpath, payload, meta)
                         return payload
 
                 except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                     last_err = e
-                    await asyncio.sleep(min(self._cfg.backoff_max_s, self._cfg.backoff_base_s * (2 ** (attempt - 1))))
+                    await asyncio.sleep(
+                        min(
+                            self._cfg.backoff_max_s, self._cfg.backoff_base_s * (2 ** (attempt - 1))
+                        )
+                    )
 
-        raise MLBAPIError(f"Failed after retries endpoint={endpoint} params={dict(params)} err={last_err}")
+        raise MLBAPIError(
+            f"Failed after retries endpoint={endpoint} params={dict(params)} err={last_err}"
+        )

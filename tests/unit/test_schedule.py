@@ -1,8 +1,8 @@
 """Tests for winprob.mlbapi.schedule."""
+
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
@@ -10,11 +10,7 @@ import pandas as pd
 import pytest
 
 if TYPE_CHECKING:
-    from _pytest.capture import CaptureFixture
-    from _pytest.fixtures import FixtureRequest
-    from _pytest.logging import LogCaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
-    from pytest_mock.plugin import MockerFixture
+    pass
 
 from winprob.mlbapi.schedule import (
     SCHEDULE_FIELDS_MIN,
@@ -52,8 +48,15 @@ def test_normalize_schedule_basic(raw_schedule_response: dict) -> None:
     df = normalize_schedule(raw_schedule_response)
     assert len(df) == 2
     expected_cols = {
-        "game_pk", "game_date_utc", "home_mlb_id", "away_mlb_id",
-        "venue_id", "local_timezone", "double_header", "game_number", "status",
+        "game_pk",
+        "game_date_utc",
+        "home_mlb_id",
+        "away_mlb_id",
+        "venue_id",
+        "local_timezone",
+        "double_header",
+        "game_number",
+        "status",
     }
     assert expected_cols.issubset(set(df.columns))
 
@@ -81,12 +84,24 @@ def test_normalize_schedule_drops_missing_game_pk() -> None:
             {
                 "date": "2024-04-01",
                 "games": [
-                    {"gamePk": None, "gameDate": "2024-04-01T17:10:00Z",
-                     "teams": {"home": {"team": {"id": 111}}, "away": {"team": {"id": 133}}},
-                     "venue": {}, "doubleHeader": "N", "gameNumber": 1, "status": {}},
-                    {"gamePk": 745804, "gameDate": "2024-04-01T19:40:00Z",
-                     "teams": {"home": {"team": {"id": 147}}, "away": {"team": {"id": 139}}},
-                     "venue": {}, "doubleHeader": "N", "gameNumber": 1, "status": {}},
+                    {
+                        "gamePk": None,
+                        "gameDate": "2024-04-01T17:10:00Z",
+                        "teams": {"home": {"team": {"id": 111}}, "away": {"team": {"id": 133}}},
+                        "venue": {},
+                        "doubleHeader": "N",
+                        "gameNumber": 1,
+                        "status": {},
+                    },
+                    {
+                        "gamePk": 745804,
+                        "gameDate": "2024-04-01T19:40:00Z",
+                        "teams": {"home": {"team": {"id": 147}}, "away": {"team": {"id": 139}}},
+                        "venue": {},
+                        "doubleHeader": "N",
+                        "gameNumber": 1,
+                        "status": {},
+                    },
                 ],
             }
         ]
@@ -104,9 +119,15 @@ def test_normalize_schedule_drops_missing_team_ids() -> None:
                 "date": "2024-04-01",
                 "games": [
                     # Missing away team ID
-                    {"gamePk": 1, "gameDate": "2024-04-01T17:10:00Z",
-                     "teams": {"home": {"team": {"id": 111}}, "away": {"team": {}}},
-                     "venue": {}, "doubleHeader": "N", "gameNumber": 1, "status": {}},
+                    {
+                        "gamePk": 1,
+                        "gameDate": "2024-04-01T17:10:00Z",
+                        "teams": {"home": {"team": {"id": 111}}, "away": {"team": {}}},
+                        "venue": {},
+                        "doubleHeader": "N",
+                        "gameNumber": 1,
+                        "status": {},
+                    },
                 ],
             }
         ]
@@ -128,9 +149,15 @@ def test_normalize_schedule_null_venue() -> None:
             {
                 "date": "2024-04-01",
                 "games": [
-                    {"gamePk": 1, "gameDate": "2024-04-01T17:10:00Z",
-                     "teams": {"home": {"team": {"id": 111}}, "away": {"team": {"id": 133}}},
-                     "venue": None, "doubleHeader": "N", "gameNumber": 1, "status": {}},
+                    {
+                        "gamePk": 1,
+                        "gameDate": "2024-04-01T17:10:00Z",
+                        "teams": {"home": {"team": {"id": 111}}, "away": {"team": {"id": 133}}},
+                        "venue": None,
+                        "doubleHeader": "N",
+                        "gameNumber": 1,
+                        "status": {},
+                    },
                 ],
             }
         ]

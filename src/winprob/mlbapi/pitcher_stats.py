@@ -11,7 +11,6 @@ endpoint so matches survive name variations.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass
 
@@ -47,9 +46,9 @@ class PitcherSeasonStats:
     player_name: str
     season: int
     era: float
-    k9: float        # strikeouts per 9 innings
-    bb9: float       # walks per 9 innings
-    fip_raw: float   # HR*13 + BB*3 - K*2 (per IP * 9), un-constant-adjusted
+    k9: float  # strikeouts per 9 innings
+    bb9: float  # walks per 9 innings
+    fip_raw: float  # HR*13 + BB*3 - K*2 (per IP * 9), un-constant-adjusted
     whip: float
     ip: float
     games_started: int

@@ -17,7 +17,7 @@ class ModelMetadata:
     """Provenance record saved alongside every model artifact."""
 
     model_version: str
-    model_type: str          # "logistic" | "lightgbm"
+    model_type: str  # "logistic" | "lightgbm"
     training_seasons: list[int]
     hyperparameters: dict[str, Any]
     feature_set_version: str
@@ -44,9 +44,7 @@ def save_model(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     joblib.dump(model, out_dir / "model.joblib")
-    (out_dir / "metadata.json").write_text(
-        json.dumps(asdict(meta), indent=2), encoding="utf-8"
-    )
+    (out_dir / "metadata.json").write_text(json.dumps(asdict(meta), indent=2), encoding="utf-8")
     return out_dir
 
 

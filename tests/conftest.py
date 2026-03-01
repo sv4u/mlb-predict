@@ -1,4 +1,5 @@
 """Shared pytest fixtures for the mlb-winprob test suite."""
+
 from __future__ import annotations
 
 import io
@@ -10,11 +11,7 @@ import pandas as pd
 import pytest
 
 if TYPE_CHECKING:
-    from _pytest.capture import CaptureFixture
-    from _pytest.fixtures import FixtureRequest
-    from _pytest.logging import LogCaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
-    from pytest_mock.plugin import MockerFixture
+    pass
 
 from winprob.retrosheet.gamelogs import GAMELOG_COLUMNS
 
@@ -162,12 +159,8 @@ def _make_gamelog_row(
 def gamelog_txt_path(tmp_path: Path) -> Path:
     """Write a minimal two-game GL TXT file and return its path."""
     rows = [
-        _make_gamelog_row(
-            "20240401", "0", "OAK", "BOS", "3", "5"
-        ),
-        _make_gamelog_row(
-            "20240401", "0", "CWS", "DET", "1", "4"
-        ),
+        _make_gamelog_row("20240401", "0", "OAK", "BOS", "3", "5"),
+        _make_gamelog_row("20240401", "0", "CWS", "DET", "1", "4"),
     ]
     lines = [",".join(f'"{v}"' for v in row) for row in rows]
     p = tmp_path / "GL2024.TXT"

@@ -46,7 +46,9 @@ def _diff_snapshots(old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
     )
     merged["delta"] = merged["predicted_home_win_prob_new"] - merged["predicted_home_win_prob_old"]
     merged["abs_delta"] = merged["delta"].abs()
-    merged["direction"] = np.where(merged["delta"] > 0, "up", np.where(merged["delta"] < 0, "down", "unchanged"))
+    merged["direction"] = np.where(
+        merged["delta"] > 0, "up", np.where(merged["delta"] < 0, "down", "unchanged")
+    )
     return merged.rename(
         columns={
             "predicted_home_win_prob_old": "p_old",
@@ -55,7 +57,9 @@ def _diff_snapshots(old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
     )[["game_pk", "p_old", "p_new", "delta", "abs_delta", "direction"]]
 
 
-def _metrics_from_diff(diff: pd.DataFrame, *, run_ts: str, model_version: str, season: int) -> DriftMetrics:
+def _metrics_from_diff(
+    diff: pd.DataFrame, *, run_ts: str, model_version: str, season: int
+) -> DriftMetrics:
     ad = diff["abs_delta"]
     return DriftMetrics(
         run_ts_utc=run_ts,
@@ -107,8 +111,12 @@ def compute_drift(
 
     drift_dir.mkdir(parents=True, exist_ok=True)
 
-    inc_metrics = _metrics_from_diff(inc_diff, run_ts=run_ts, model_version=model_version, season=season)
-    base_metrics = _metrics_from_diff(base_diff, run_ts=run_ts, model_version=model_version, season=season)
+    inc_metrics = _metrics_from_diff(
+        inc_diff, run_ts=run_ts, model_version=model_version, season=season
+    )
+    base_metrics = _metrics_from_diff(
+        base_diff, run_ts=run_ts, model_version=model_version, season=season
+    )
 
     # Append to season-level run_metrics
     _append_run_metrics(inc_metrics, drift_dir / f"run_metrics_{season}.parquet")

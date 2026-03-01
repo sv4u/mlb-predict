@@ -99,6 +99,7 @@ _TIME_DECAY: float = 0.12  # exponential decay rate per season
 # Platt calibrator
 # ---------------------------------------------------------------------------
 
+
 class PlattCalibrator:
     """Platt scaling: fits a sigmoid on the base model's log-odds output."""
 
@@ -142,15 +143,14 @@ class StackedEnsemble:
 
     def predict_proba(self, X: Any) -> np.ndarray:
         """Return shape (n, 2) probability array (mirrors sklearn API)."""
-        preds = np.column_stack(
-            [_predict_proba(self.base_models[k], X) for k in self.base_keys]
-        )
+        preds = np.column_stack([_predict_proba(self.base_models[k], X) for k in self.base_keys])
         return self.meta_lr.predict_proba(preds)
 
 
 # ---------------------------------------------------------------------------
 # Time weighting
 # ---------------------------------------------------------------------------
+
 
 def _season_weights(seasons: pd.Series, decay: float = _TIME_DECAY) -> np.ndarray:
     """Exponential weights: most-recent season = 1.0, older → exp(-decay*gap)."""
@@ -162,10 +162,9 @@ def _season_weights(seasons: pd.Series, decay: float = _TIME_DECAY) -> np.ndarra
 # Model builders
 # ---------------------------------------------------------------------------
 
+
 def _build_lr() -> Pipeline:
-    return Pipeline(
-        [("scaler", StandardScaler()), ("lr", LogisticRegression(**_LR_PARAMS))]
-    )
+    return Pipeline([("scaler", StandardScaler()), ("lr", LogisticRegression(**_LR_PARAMS))])
 
 
 def _build_lgbm(params: dict[str, Any] | None = None) -> lgb.LGBMClassifier:
@@ -181,6 +180,7 @@ def _build_xgb(params: dict[str, Any] | None = None) -> xgb.XGBClassifier:
 # ---------------------------------------------------------------------------
 # Predict helpers
 # ---------------------------------------------------------------------------
+
 
 def _raw_proba(model: Any, X: np.ndarray | pd.DataFrame) -> np.ndarray:
     is_lgbm = hasattr(model, "booster_")
@@ -199,6 +199,7 @@ def _predict_proba(model: Any, X: np.ndarray | pd.DataFrame) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Data prep
 # ---------------------------------------------------------------------------
+
 
 def _prep(
     df: pd.DataFrame,
@@ -249,6 +250,7 @@ def _fit_model(
 # Optuna HPO
 # ---------------------------------------------------------------------------
 
+
 def run_optuna_hpo(
     season_dfs: dict[int, pd.DataFrame],
     *,
@@ -263,13 +265,14 @@ def run_optuna_hpo(
     Returns the best params dict and saves it to ``model_dir/hpo_{model_type}.json``.
     """
     import optuna
+
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
     seasons = sorted(season_dfs)
     if eval_seasons is None:
         eval_seasons = seasons[-3:]  # evaluate on last 3 seasons for speed
 
-    def _objective(trial: "optuna.Trial") -> float:  # type: ignore[name-defined]
+    def _objective(trial: "optuna.Trial") -> float:
         if model_type == "lightgbm":
             params = {
                 "objective": "binary",
@@ -349,6 +352,7 @@ def run_optuna_hpo(
 # Expanding-window CV
 # ---------------------------------------------------------------------------
 
+
 def run_expanding_cv(
     features_dir: Path = Path("data/processed/features"),
     model_dir: Path = Path("data/models"),
@@ -419,10 +423,14 @@ def run_expanding_cv(
         # Stacked ensemble
         base_keys = [k for k in ["logistic", "lightgbm", "xgboost"] if k in fitted_models]
         if "stacked" in model_types and len(base_keys) >= 2:
-            cal_preds = np.column_stack([_predict_proba(fitted_models[k], X_cal) for k in base_keys])
+            cal_preds = np.column_stack(
+                [_predict_proba(fitted_models[k], X_cal) for k in base_keys]
+            )
             meta_lr = LogisticRegression(**_META_PARAMS)
             meta_lr.fit(cal_preds, y_cal)
-            eval_preds = np.column_stack([_predict_proba(fitted_models[k], X_eval) for k in base_keys])
+            eval_preds = np.column_stack(
+                [_predict_proba(fitted_models[k], X_eval) for k in base_keys]
+            )
             y_prob_stack = meta_lr.predict_proba(eval_preds)[:, 1]
             er = evaluate(y_eval, y_prob_stack)
             results["stacked"].append(_result_row("stacked", eval_season, len(X_train), er))
@@ -453,6 +461,7 @@ def _result_row(model_type: str, season: int, n_train: int, er: EvalResult) -> d
 # ---------------------------------------------------------------------------
 # Production model training
 # ---------------------------------------------------------------------------
+
 
 def train_production_model(
     features_dir: Path = Path("data/processed/features"),
@@ -503,6 +512,7 @@ def train_production_model(
     # that `--models stacked --skip-cv` works without retraining base models.
     if "stacked" in model_types:
         from winprob.model.artifacts import latest_artifact as _latest
+
         for _bk in ["logistic", "lightgbm", "xgboost"]:
             if _bk not in base_models:
                 _art = _latest(_bk, model_dir=model_dir, version=_FEATURE_VERSION)

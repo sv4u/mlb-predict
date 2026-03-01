@@ -26,7 +26,7 @@ import pandas as pd
 _INITIAL_ELO: float = 1500.0
 _K_FACTOR: float = 20.0
 _HOME_FIELD_ADV: float = 24.0  # Elo points added to home team expected score
-_REGRESSION: float = 0.33       # fraction of gap to 1500 closed at season start
+_REGRESSION: float = 0.33  # fraction of gap to 1500 closed at season start
 
 
 @dataclass
@@ -45,8 +45,8 @@ class EloState:
     def apply_season_regression(self) -> None:
         """Pull every team's rating toward 1500 at the start of a new season."""
         for team in list(self.ratings):
-            self.ratings[team] = (
-                self.ratings[team] + _REGRESSION * (_INITIAL_ELO - self.ratings[team])
+            self.ratings[team] = self.ratings[team] + _REGRESSION * (
+                _INITIAL_ELO - self.ratings[team]
             )
 
 

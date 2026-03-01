@@ -4,27 +4,22 @@ Property-based tests using Hypothesis.
 These tests verify system-level invariants that must hold for all valid inputs,
 complementing the example-based unit tests.
 """
+
 from __future__ import annotations
 
 import hashlib
-import io
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
-import pytest
 from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 if TYPE_CHECKING:
-    from _pytest.capture import CaptureFixture
-    from _pytest.fixtures import FixtureRequest
-    from _pytest.logging import LogCaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
-    from pytest_mock.plugin import MockerFixture
+    pass
 
-from winprob.mlbapi.client import MLBAPIClient, MLBAPIConfig
+from winprob.mlbapi.client import MLBAPIClient
 from winprob.mlbapi.schedule import normalize_schedule
 from winprob.mlbapi.teams import build_team_maps
 from winprob.retrosheet.gamelogs import sha256_bytes
@@ -126,11 +121,7 @@ def test_sha256_file_matches_hashlib(content: bytes) -> None:
 # ---------------------------------------------------------------------------
 
 
-@given(
-    files=st.lists(
-        st.binary(min_size=1, max_size=256), min_size=1, max_size=5, unique=True
-    )
-)
+@given(files=st.lists(st.binary(min_size=1, max_size=256), min_size=1, max_size=5, unique=True))
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_sha256_aggregate_order_independent(files: list[bytes]) -> None:
     """Aggregate hash must be identical regardless of how files are listed."""
@@ -157,9 +148,15 @@ def test_sha256_aggregate_order_independent(files: list[bytes]) -> None:
 
 
 @given(
-    endpoint=st.text(min_size=1, max_size=50, alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters="/_")),
+    endpoint=st.text(
+        min_size=1,
+        max_size=50,
+        alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters="/_"),
+    ),
     params=st.dictionaries(
-        keys=st.text(min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Lu", "Ll"))),
+        keys=st.text(
+            min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Lu", "Ll"))
+        ),
         values=st.integers(min_value=1, max_value=9999),
         min_size=0,
         max_size=5,
@@ -174,9 +171,13 @@ def test_cache_key_deterministic(endpoint: str, params: dict) -> None:
 
 
 @given(
-    endpoint=st.text(min_size=1, max_size=30, alphabet=st.characters(whitelist_categories=("Lu", "Ll"))),
+    endpoint=st.text(
+        min_size=1, max_size=30, alphabet=st.characters(whitelist_categories=("Lu", "Ll"))
+    ),
     params=st.dictionaries(
-        keys=st.text(min_size=1, max_size=10, alphabet=st.characters(whitelist_categories=("Lu", "Ll"))),
+        keys=st.text(
+            min_size=1, max_size=10, alphabet=st.characters(whitelist_categories=("Lu", "Ll"))
+        ),
         values=st.integers(min_value=1, max_value=9999),
         min_size=0,
         max_size=4,
@@ -258,8 +259,15 @@ def test_normalize_schedule_no_null_game_pk(games: list[dict]) -> None:
 def test_build_team_maps_id_coverage(teams: list[dict]) -> None:
     """mlb_id_to_abbrev and mlb_id_to_name must have identical key sets."""
     df = pd.DataFrame(
-        [{"season": 2024, "mlb_team_id": t["mlb_team_id"], "abbrev": t["abbrev"], "name": t["name"]}
-         for t in teams]
+        [
+            {
+                "season": 2024,
+                "mlb_team_id": t["mlb_team_id"],
+                "abbrev": t["abbrev"],
+                "name": t["name"],
+            }
+            for t in teams
+        ]
     )
     maps = build_team_maps(df)
     assert set(maps.mlb_id_to_abbrev.keys()) == set(maps.mlb_id_to_name.keys())
@@ -283,8 +291,15 @@ def test_build_team_maps_abbrev_roundtrip(teams: list[dict]) -> None:
     """mlb_id → abbrev → mlb_id must round-trip for every team when abbrevs are unique."""
     assume(len({t["abbrev"] for t in teams}) == len(teams))
     df = pd.DataFrame(
-        [{"season": 2024, "mlb_team_id": t["mlb_team_id"], "abbrev": t["abbrev"], "name": t["name"]}
-         for t in teams]
+        [
+            {
+                "season": 2024,
+                "mlb_team_id": t["mlb_team_id"],
+                "abbrev": t["abbrev"],
+                "name": t["name"],
+            }
+            for t in teams
+        ]
     )
     maps = build_team_maps(df)
     for team in teams:

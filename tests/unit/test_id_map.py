@@ -1,4 +1,5 @@
 """Tests for winprob.ingest.id_map."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,11 +9,7 @@ import pandas as pd
 import pytest
 
 if TYPE_CHECKING:
-    from _pytest.capture import CaptureFixture
-    from _pytest.fixtures import FixtureRequest
-    from _pytest.logging import LogCaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
-    from pytest_mock.plugin import MockerFixture
+    pass
 
 from winprob.ingest.id_map import RetroTeamMap, load_retro_team_map
 
@@ -28,9 +25,9 @@ def team_map_df() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "retro_team_code": ["BOS", "NYY", "OAK", "MON"],
-            "mlb_team_id":     [111,   147,   133,   None],
+            "mlb_team_id": [111, 147, 133, None],
             "valid_from_season": [1998, 1903, 1968, 1969],
-            "valid_to_season":   [2099, 2099, 2099, 2004],
+            "valid_to_season": [2099, 2099, 2099, 2004],
         }
     )
 
@@ -83,9 +80,9 @@ def test_retro_to_mlb_id_ambiguous_raises() -> None:
     df = pd.DataFrame(
         {
             "retro_team_code": ["BOS", "BOS"],
-            "mlb_team_id":     [111,   112],
+            "mlb_team_id": [111, 112],
             "valid_from_season": [2000, 2000],
-            "valid_to_season":   [2099, 2099],
+            "valid_to_season": [2099, 2099],
         }
     )
     m = RetroTeamMap(df=df)

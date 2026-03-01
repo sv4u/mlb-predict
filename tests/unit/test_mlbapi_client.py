@@ -1,4 +1,5 @@
 """Tests for winprob.mlbapi.client.MLBAPIClient."""
+
 from __future__ import annotations
 
 import json
@@ -9,18 +10,13 @@ import pytest
 from aioresponses import aioresponses as aioresponses_ctx
 
 if TYPE_CHECKING:
-    from _pytest.capture import CaptureFixture
-    from _pytest.fixtures import FixtureRequest
-    from _pytest.logging import LogCaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
-    from pytest_mock.plugin import MockerFixture
+    pass
 
 from winprob.mlbapi.client import (
     MLBAPIClient,
     MLBAPIConfig,
     MLBAPIError,
     MLBNotFoundError,
-    MLBRateLimitError,
 )
 
 
@@ -119,7 +115,14 @@ async def test_write_and_read_cache_roundtrip(cache_dir: Path) -> None:
     """Writing then reading cache must yield the original payload."""
     client = MLBAPIClient(cache_dir=cache_dir)
     payload = {"dates": [{"date": "2024-04-01"}]}
-    meta = {"ts_unix": 0.0, "url": "u", "params": {}, "cache_key": "k", "endpoint": "e", "status": 200}
+    meta = {
+        "ts_unix": 0.0,
+        "url": "u",
+        "params": {},
+        "cache_key": "k",
+        "endpoint": "e",
+        "status": 200,
+    }
     path = cache_dir / "schedule" / "abc123.json"
     await client._write_cache(path, payload, meta)
     result = await client._read_cache(path)
@@ -130,7 +133,14 @@ async def test_write_cache_creates_parent_directory(cache_dir: Path) -> None:
     """_write_cache must create missing parent directories."""
     client = MLBAPIClient(cache_dir=cache_dir)
     path = cache_dir / "deep" / "nested" / "file.json"
-    meta = {"ts_unix": 0.0, "url": "u", "params": {}, "cache_key": "k", "endpoint": "e", "status": 200}
+    meta = {
+        "ts_unix": 0.0,
+        "url": "u",
+        "params": {},
+        "cache_key": "k",
+        "endpoint": "e",
+        "status": 200,
+    }
     await client._write_cache(path, {"ok": True}, meta)
     assert path.exists()
 
@@ -138,8 +148,14 @@ async def test_write_cache_creates_parent_directory(cache_dir: Path) -> None:
 async def test_append_meta_writes_jsonl_line(cache_dir: Path) -> None:
     """_append_meta must append a valid JSON line to metadata.jsonl."""
     client = MLBAPIClient(cache_dir=cache_dir)
-    meta = {"ts_unix": 1.23, "url": "http://example.com", "params": {"x": 1},
-            "cache_key": "abc", "endpoint": "schedule", "status": 200}
+    meta = {
+        "ts_unix": 1.23,
+        "url": "http://example.com",
+        "params": {"x": 1},
+        "cache_key": "abc",
+        "endpoint": "schedule",
+        "status": 200,
+    }
     await client._append_meta(meta)
     lines = (cache_dir / "metadata.jsonl").read_bytes().splitlines()
     assert len(lines) == 1
@@ -151,7 +167,14 @@ async def test_append_meta_writes_jsonl_line(cache_dir: Path) -> None:
 async def test_append_meta_multiple_calls_append(cache_dir: Path) -> None:
     """Multiple _append_meta calls must append multiple lines."""
     client = MLBAPIClient(cache_dir=cache_dir)
-    base = {"ts_unix": 0.0, "url": "u", "params": {}, "cache_key": "k", "endpoint": "e", "status": 200}
+    base = {
+        "ts_unix": 0.0,
+        "url": "u",
+        "params": {},
+        "cache_key": "k",
+        "endpoint": "e",
+        "status": 200,
+    }
     for i in range(3):
         await client._append_meta({**base, "ts_unix": float(i)})
     lines = (cache_dir / "metadata.jsonl").read_bytes().splitlines()
@@ -163,7 +186,9 @@ async def test_append_meta_multiple_calls_append(cache_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_get_json_without_context_manager_raises(cache_dir: Path, fast_config: MLBAPIConfig) -> None:
+async def test_get_json_without_context_manager_raises(
+    cache_dir: Path, fast_config: MLBAPIConfig
+) -> None:
     """Calling get_json without entering the async context manager must raise."""
     client = MLBAPIClient(config=fast_config, cache_dir=cache_dir)
     with pytest.raises(RuntimeError, match="session not initialized"):
@@ -181,7 +206,14 @@ async def test_get_json_serves_from_cache(cache_dir: Path, fast_config: MLBAPICo
     cached_payload = {"dates": [{"date": "2024-04-01"}]}
     key = client._cache_key("schedule", {"sportId": 1})
     path = client._cache_path("schedule", key)
-    meta = {"ts_unix": 0.0, "url": "u", "params": {}, "cache_key": key, "endpoint": "schedule", "status": 200}
+    meta = {
+        "ts_unix": 0.0,
+        "url": "u",
+        "params": {},
+        "cache_key": key,
+        "endpoint": "schedule",
+        "status": 200,
+    }
     await client._write_cache(path, cached_payload, meta)
 
     async with MLBAPIClient(config=fast_config, cache_dir=cache_dir) as c:
@@ -220,7 +252,14 @@ async def test_get_json_refresh_bypasses_cache(cache_dir: Path, fast_config: MLB
     tmp_client = MLBAPIClient(config=fast_config, cache_dir=cache_dir)
     key = tmp_client._cache_key("schedule", params)
     path = tmp_client._cache_path("schedule", key)
-    meta = {"ts_unix": 0.0, "url": "u", "params": {}, "cache_key": key, "endpoint": "schedule", "status": 200}
+    meta = {
+        "ts_unix": 0.0,
+        "url": "u",
+        "params": {},
+        "cache_key": key,
+        "endpoint": "schedule",
+        "status": 200,
+    }
     await tmp_client._write_cache(path, old_payload, meta)
 
     with aioresponses_ctx() as m:
@@ -231,7 +270,9 @@ async def test_get_json_refresh_bypasses_cache(cache_dir: Path, fast_config: MLB
     assert result == new_payload
 
 
-async def test_get_json_cache_readonly_raises_on_miss(cache_dir: Path, fast_config: MLBAPIConfig) -> None:
+async def test_get_json_cache_readonly_raises_on_miss(
+    cache_dir: Path, fast_config: MLBAPIConfig
+) -> None:
     """get_json in cache_readonly mode must raise MLBAPIError on cache miss."""
     async with MLBAPIClient(config=fast_config, cache_dir=cache_dir, cache_readonly=True) as client:
         with pytest.raises(MLBAPIError, match="Cache miss in readonly mode"):
@@ -277,7 +318,9 @@ async def test_get_json_5xx_retries(cache_dir: Path, fast_config: MLBAPIConfig) 
 
 async def test_get_json_exhausts_retries_raises(cache_dir: Path) -> None:
     """Exhausting all retries must raise MLBAPIError."""
-    config = MLBAPIConfig(max_retries=2, backoff_base_s=0.001, backoff_max_s=0.01, rps=10_000.0, burst=10_000.0)
+    config = MLBAPIConfig(
+        max_retries=2, backoff_base_s=0.001, backoff_max_s=0.01, rps=10_000.0, burst=10_000.0
+    )
     with aioresponses_ctx() as m:
         for _ in range(10):  # more than max_retries
             m.get(f"{BASE_URL}/schedule", status=500)
@@ -291,7 +334,9 @@ async def test_get_json_exhausts_retries_raises(cache_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_context_manager_closes_owned_session(cache_dir: Path, fast_config: MLBAPIConfig) -> None:
+async def test_context_manager_closes_owned_session(
+    cache_dir: Path, fast_config: MLBAPIConfig
+) -> None:
     """The client must close the session it owns on __aexit__."""
     async with MLBAPIClient(config=fast_config, cache_dir=cache_dir) as client:
         assert client._session is not None
@@ -303,7 +348,9 @@ async def test_external_session_not_closed(cache_dir: Path, fast_config: MLBAPIC
     import aiohttp
 
     async with aiohttp.ClientSession() as external_session:
-        async with MLBAPIClient(config=fast_config, cache_dir=cache_dir, session=external_session) as client:
+        async with MLBAPIClient(
+            config=fast_config, cache_dir=cache_dir, session=external_session
+        ) as client:
             assert not client._owns_session
         # External session must still be open
         assert not external_session.closed
