@@ -21,7 +21,7 @@ sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent / "src
 def main() -> None:
     ap = argparse.ArgumentParser(description="Start the MLB Win Probability dashboard.")
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--port", type=int, default=8087)
     ap.add_argument("--model", default="logistic", choices=["logistic", "lightgbm", "xgboost"])
     ap.add_argument("--reload", action="store_true")
     args = ap.parse_args()

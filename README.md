@@ -4,15 +4,69 @@ Research-grade pre-game win probability model for MLB regular season games, 2000
 
 ## Model performance (v3 — out-of-sample, expanding-window CV)
 
-| Model | Mean Brier | Mean Accuracy | Cal. Error | Best season |
-|---|---|---|---|---|
-| Logistic regression | 0.2443 | 56.2% | 0.030 | 2019: 58.4% |
-| LightGBM (Optuna) | 0.2448 | 55.9% | 0.029 | 2019: 58.7% |
-| XGBoost (Optuna) | **0.2442** | 56.4% | 0.029 | 2019: 59.2% |
-| Stacked ensemble | **0.2441** | 56.3% | 0.029 | 2019: 59.1% |
+| Model               | Mean Brier | Mean Accuracy | Cal. Error | Best season |
+| ------------------- | ---------- | ------------- | ---------- | ----------- |
+| Logistic regression | 0.2443     | 56.2%         | 0.030      | 2019: 58.4% |
+| LightGBM (Optuna)   | 0.2448     | 55.9%         | 0.029      | 2019: 58.7% |
+| XGBoost (Optuna)    | **0.2442** | 56.4%         | 0.029      | 2019: 59.2% |
+| Stacked ensemble    | **0.2441** | 56.3%         | 0.029      | 2019: 59.1% |
 
 All metrics are fully out-of-sample: train on seasons < N, evaluate on season N.
 The stacked ensemble is the default production model.
+
+---
+
+## Models
+
+The system trains four models on 66 pre-game features using an **expanding-window protocol** — each season N is evaluated using a model trained exclusively on seasons before N, so all reported metrics are fully out-of-sample. Every model goes through **Platt calibration** (a sigmoid meta-layer fitted on a held-out calibration set) and **time-weighted training** (exponential decay rate 0.12 per season, so 2024 weight = 1.0, 2020 weight ≈ 0.61, 2015 weight ≈ 0.30).
+
+### Logistic Regression
+
+A regularised linear model that serves as the interpretable baseline. All 66 features are z-score standardised before fitting. Because the decision boundary is a hyperplane, the model captures additive effects — for example, a larger Elo differential increases home-win probability by a fixed amount regardless of the other features. Its simplicity makes it fast, stable, and easy to audit.
+
+- **Regularisation**: L2 (ridge), `C=1.0`
+- **Solver**: L-BFGS with up to 1 000 iterations
+- **Interpretability**: SHAP attributions are computed directly from `coef × z-score` — no approximate explainer needed
+- **When to use**: Speed-critical inference, auditing individual predictions, baseline comparison
+
+### LightGBM
+
+Microsoft's LightGBM grows an ensemble of shallow decision trees in sequence, where each tree corrects the residual errors of the ones before it. Unlike logistic regression, it captures **non-linear interactions** — for example, a high Elo differential combined with a good home/away split may carry a larger joint effect than either feature alone.
+
+- **Hyperparameters**: 60-trial Optuna Bayesian search minimising out-of-sample Brier score (typical result: `num_leaves≈63`, `learning_rate≈0.05`, `n_estimators≈500`)
+- **Interpretability**: Tree-based SHAP values via `shap.TreeExplainer`
+- **When to use**: Fast batch inference at scale; often competitive with XGBoost
+
+### XGBoost
+
+DMLC's XGBoost is the other dominant gradient-boosted tree library. Its regularisation scheme (`min_child_weight`, separate L1/L2 penalties on leaf weights) and histogram-based split finding produce probability estimates that are **complementary** to LightGBM — they tend to disagree most on uncertain games near 50%, which makes them useful ensemble partners. XGBoost typically achieves the best **single-model** Brier score in this system.
+
+- **Hyperparameters**: 60-trial Optuna Bayesian search (typical result: `max_depth≈6`, `learning_rate≈0.05`, `n_estimators≈500`)
+- **Interpretability**: Tree-based SHAP values via `shap.TreeExplainer`
+- **When to use**: Highest standalone accuracy; default choice when not ensembling
+
+### Stacked Ensemble (default production model)
+
+The stacked ensemble never sees raw features. Instead, it takes the **calibrated probability outputs** of all three base models as its three inputs and trains a logistic-regression **meta-learner** to find the optimal blend. Because each base model makes different errors, the meta-learner learns to up-weight whichever model is most confident in each probability range.
+
+```
+ Logistic prob  ─┐
+ LightGBM prob  ─┼──▶  Logistic meta-learner  ──▶  P(home win)
+ XGBoost prob   ─┘
+```
+
+- **Meta-learner**: `LogisticRegression(C=0.5)` — slight regularisation prevents over-fitting to the calibration set
+- **Training**: The meta-learner is fit on the same held-out calibration split used for Platt scaling, so base-model probabilities are out-of-sample relative to the meta-learner
+- **When to use**: Always — this is the default and achieves the best Brier score and calibration
+
+### Training techniques
+
+| Technique | What it does |
+| --- | --- |
+| **Platt calibration** | Fits a sigmoid on the base model's log-odds output using a held-out calibration set. Corrects systematic over- or under-confidence so that predicted 65% games actually win ~65% of the time. |
+| **Time-weighted training** | Exponential decay (`rate=0.12` per season) gives recent seasons more influence. This adapts the model to baseball rule changes — the 2023 shift ban, pitch clock, and larger bases shift team-level stats in ways that older seasons do not reflect. |
+| **Optuna HPO** | Bayesian hyperparameter search (60 trials per model type) over a 3-season expanding-window objective. Searches `learning_rate`, `num_leaves`/`max_depth`, `n_estimators`, `subsample`, `colsample_bytree`, L1/L2 regularisation. |
+| **Expanding-window CV** | For evaluation season N, the model is trained on all seasons before N. No future data ever leaks into training or calibration. |
 
 ---
 
@@ -101,7 +155,7 @@ python scripts/train_model.py
 
 ```bash
 python scripts/serve.py
-# Open http://localhost:8000
+# Open http://localhost:8087
 ```
 
 ### CLI query tool
@@ -152,19 +206,19 @@ MLB Stats API        Retrosheet gamelogs      FanGraphs
 
 ## Data locations
 
-| Path | Contents |
-|---|---|
-| `data/raw/schedules/` | Raw MLB Stats API JSON responses |
-| `data/raw/gamelogs/` | Raw Retrosheet TXT game logs |
-| `data/processed/schedules/` | `games_YYYY.parquet` + checksums |
-| `data/processed/retrosheet/` | `gamelogs_YYYY.parquet` |
-| `data/processed/crosswalk/` | `game_id_map_YYYY.parquet`, coverage report |
-| `data/processed/pitcher_stats/` | `pitchers_YYYY.parquet` (MLB API individual stats) |
-| `data/processed/fangraphs/` | `fangraphs_YYYY.parquet` (FanGraphs team advanced metrics) |
-| `data/processed/features/` | `features_YYYY.parquet` (66-feature matrix) |
-| `data/models/` | Trained model artifacts + HPO results + CV summaries |
-| `data/processed/predictions/` | Immutable prediction snapshots |
-| `data/processed/drift/` | Drift monitoring logs |
+| Path                            | Contents                                                   |
+| ------------------------------- | ---------------------------------------------------------- |
+| `data/raw/schedules/`           | Raw MLB Stats API JSON responses                           |
+| `data/raw/gamelogs/`            | Raw Retrosheet TXT game logs                               |
+| `data/processed/schedules/`     | `games_YYYY.parquet` + checksums                           |
+| `data/processed/retrosheet/`    | `gamelogs_YYYY.parquet`                                    |
+| `data/processed/crosswalk/`     | `game_id_map_YYYY.parquet`, coverage report                |
+| `data/processed/pitcher_stats/` | `pitchers_YYYY.parquet` (MLB API individual stats)         |
+| `data/processed/fangraphs/`     | `fangraphs_YYYY.parquet` (FanGraphs team advanced metrics) |
+| `data/processed/features/`      | `features_YYYY.parquet` (66-feature matrix)                |
+| `data/models/`                  | Trained model artifacts + HPO results + CV summaries       |
+| `data/processed/predictions/`   | Immutable prediction snapshots                             |
+| `data/processed/drift/`         | Drift monitoring logs                                      |
 
 ---
 
@@ -197,7 +251,7 @@ print(df24.groupby(pd.cut(df24["prob"].clip(0.5,0.99), 5))["fav_won"].mean())
 
 ## Web dashboard
 
-Start the dashboard with `python scripts/serve.py`, then open `http://localhost:8000`.
+Start the dashboard with `python scripts/serve.py`, then open `http://localhost:8087`.
 
 Features:
 
@@ -208,14 +262,14 @@ Features:
 
 ### API endpoints
 
-| Endpoint | Description |
-|---|---|
-| `GET /api/seasons` | List available seasons |
-| `GET /api/teams` | List all teams |
-| `GET /api/games?season=&home=&away=&date=` | Paginated game list with predictions |
-| `GET /api/games/{game_pk}` | Full detail + SHAP attribution for one game |
-| `GET /api/upsets?season=&min_prob=0.65` | Biggest upsets by favourite probability |
-| `GET /api/cv-summary` | Model CV results by season |
+| Endpoint                                   | Description                                 |
+| ------------------------------------------ | ------------------------------------------- |
+| `GET /api/seasons`                         | List available seasons                      |
+| `GET /api/teams`                           | List all teams                              |
+| `GET /api/games?season=&home=&away=&date=` | Paginated game list with predictions        |
+| `GET /api/games/{game_pk}`                 | Full detail + SHAP attribution for one game |
+| `GET /api/upsets?season=&min_prob=0.65`    | Biggest upsets by favourite probability     |
+| `GET /api/cv-summary`                      | Model CV results by season                  |
 
 ---
 
@@ -283,6 +337,7 @@ mlb-winprob/
 ## Attribution
 
 Game log data from **Retrosheet** (retrosheet.org).
+
 > The information used here was obtained free of charge from and is copyrighted by Retrosheet.
 > Interested parties may contact Retrosheet at 20 Sunset Rd., Newark, DE 19711.
 

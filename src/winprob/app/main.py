@@ -173,6 +173,8 @@ def api_game_detail(game_pk: int) -> dict:
 @app.get("/api/upsets")
 def api_upsets(
     season: Annotated[int | None, Query()] = None,
+    home: Annotated[str | None, Query()] = None,
+    away: Annotated[str | None, Query()] = None,
     min_prob: Annotated[float, Query(ge=0.5, le=1.0)] = 0.65,
     limit: Annotated[int, Query(ge=1, le=200)] = 20,
 ) -> list[dict]:
@@ -180,6 +182,10 @@ def api_upsets(
     df = get_features()
     if season:
         df = df[df["season"] == season]
+    if home:
+        df = df[df["home_retro"] == home.upper()]
+    if away:
+        df = df[df["away_retro"] == away.upper()]
     has_result = df[df["home_win"].notna() & df["prob"].notna()].copy()
     has_result["fav_home"] = has_result["prob"] >= 0.5
     has_result["fav_prob"] = has_result["prob"].clip(lower=0.5)
