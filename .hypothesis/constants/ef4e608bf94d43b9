@@ -1,0 +1,4 @@
+# file: /Users/sasank.vishnubhatla/Documents/personal-dev/mlb-winprob/src/winprob/mlbapi/schedule.py
+# hypothesis_version: 6.151.9
+
+['+00:00', ',', 'R', 'Z', 'away', 'away_mlb_id', 'date', 'dates', 'dates,date', 'dates,games,gameDate', 'dates,games,gamePk', 'dates,games,venue,id', 'detailedState', 'doubleHeader', 'double_header', 'endDate', 'fields', 'gameDate', 'gameNumber', 'gamePk', 'gameType', 'game_date_utc', 'game_number', 'game_pk', 'games', 'home', 'home_mlb_id', 'id', 'local_timezone', 'schedule', 'season', 'sportId', 'startDate', 'status', 'team', 'teams', 'timeZone', 'venue', 'venue_id']

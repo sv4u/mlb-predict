@@ -1,0 +1,134 @@
+from __future__ import annotations
+
+import argparse
+import asyncio
+from dataclasses import asdict
+from datetime import date, timedelta
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+from zoneinfo import ZoneInfo
+
+from winprob.mlbapi.client import MLBAPIClient, MLBAPIConfig
+from winprob.mlbapi.schedule import fetch_schedule_chunk, parse_utc_iso, schedule_bounds_regular_season
+from winprob.mlbapi.teams import build_team_maps, get_teams_df
+from winprob.util.hashing import sha256_aggregate_of_files, sha256_file
+
+
+def month_ranges(start: date, end: date) -> list[tuple[date, date]]:
+    ranges: list[tuple[date, date]] = []
+    cur = date(start.year, start.month, 1)
+    while cur <= end:
+        nxt = date(cur.year + (1 if cur.month == 12 else 0), 1 if cur.month == 12 else cur.month + 1, 1)
+        ranges.append((max(start, cur), min(end, nxt - timedelta(days=1))))
+        cur = nxt
+    return ranges
+
+
+async def fetch_with_adaptive_split(client: MLBAPIClient, *, season: int, start: date, end: date, max_mb: int, max_depth: int, depth: int = 0) -> pd.DataFrame:
+    span_days = (end - start).days + 1
+    if span_days > 31 and depth < max_depth:
+        mid = start + timedelta(days=span_days // 2)
+        left = await fetch_with_adaptive_split(client, season=season, start=start, end=mid, max_mb=max_mb, max_depth=max_depth, depth=depth + 1)
+        right = await fetch_with_adaptive_split(client, season=season, start=mid + timedelta(days=1), end=end, max_mb=max_mb, max_depth=max_depth, depth=depth + 1)
+        return pd.concat([left, right], ignore_index=True)
+
+    df = await fetch_schedule_chunk(client, season=season, start_date=start, end_date=end)
+    approx_bytes = df.memory_usage(deep=True).sum()
+    if approx_bytes > max_mb * 1024 * 1024 and depth < max_depth and span_days > 1:
+        mid = start + timedelta(days=span_days // 2)
+        left = await fetch_with_adaptive_split(client, season=season, start=start, end=mid, max_mb=max_mb, max_depth=max_depth, depth=depth + 1)
+        right = await fetch_with_adaptive_split(client, season=season, start=mid + timedelta(days=1), end=end, max_mb=max_mb, max_depth=max_depth, depth=depth + 1)
+        return pd.concat([left, right], ignore_index=True)
+
+    return df
+
+
+def add_local_times(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    utc_dt = out["game_date_utc"].map(parse_utc_iso)
+    out["game_date_utc"] = utc_dt.map(lambda x: x.isoformat())
+
+    def to_local(row: Any) -> str | None:
+        tz = row["local_timezone"]
+        if not tz:
+            return None
+        try:
+            return parse_utc_iso(row["game_date_utc"]).astimezone(ZoneInfo(tz)).isoformat()
+        except Exception:
+            return None
+
+    out["game_date_local"] = out.apply(to_local, axis=1)
+    return out
+
+
+async def ingest_one_season(*, season: int, refresh_mlbapi: bool, max_mb: int, max_depth: int) -> dict[str, Any]:
+    cfg = MLBAPIConfig(rps=5.0, burst=10.0, max_concurrency=8)
+    async with MLBAPIClient(config=cfg, refresh=refresh_mlbapi) as client:
+        teams_df = await get_teams_df(client, season=season)
+        team_maps = build_team_maps(teams_df)
+
+        start, end = await schedule_bounds_regular_season(client, season=season)
+        dfs = []
+        for (cs, ce) in month_ranges(start, end):
+            dfs.append(await fetch_with_adaptive_split(client, season=season, start=cs, end=ce, max_mb=max_mb, max_depth=max_depth))
+        df = pd.concat(dfs, ignore_index=True)
+
+    df = df.drop_duplicates(subset=["game_pk"]).sort_values("game_pk").reset_index(drop=True)
+    df["season"] = int(season)
+    df = add_local_times(df)
+    df["home_abbrev"] = df["home_mlb_id"].map(team_maps.mlb_id_to_abbrev)
+    df["away_abbrev"] = df["away_mlb_id"].map(team_maps.mlb_id_to_abbrev)
+
+    out_dir = Path("data/processed/schedule")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    parquet_path = out_dir / f"games_{season}.parquet"
+    csv_path = out_dir / f"games_{season}.csv"
+    df.to_parquet(parquet_path, index=False)
+    df.to_csv(csv_path, index=False)
+
+    teams_out = Path("data/processed/teams")
+    teams_out.mkdir(parents=True, exist_ok=True)
+    teams_df.to_parquet(teams_out / f"teams_{season}.parquet", index=False)
+
+    raw_schedule_dir = Path("data/raw/mlb_api/schedule")
+    raw_files = list(raw_schedule_dir.glob("*.json"))
+    checksum = {
+        "season": season,
+        "row_count": int(len(df)),
+        "parquet_sha256": sha256_file(parquet_path),
+        "csv_sha256": sha256_file(csv_path),
+        "raw_payloads_sha256": sha256_aggregate_of_files(raw_files) if raw_files else None,
+        "raw_file_count": int(len(raw_files)),
+        "max_response_mb": max_mb,
+        "max_split_depth": max_depth,
+        "mlbapi_config": asdict(cfg),
+    }
+    (out_dir / f"games_{season}.checksum.json").write_text(pd.Series(checksum).to_json(), encoding="utf-8")
+    return checksum
+
+
+async def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seasons", nargs="*", type=int, default=[])
+    ap.add_argument("--refresh-mlbapi", action="store_true")
+    ap.add_argument("--max-response-mb", type=int, default=5)
+    ap.add_argument("--max-split-depth", type=int, default=4)
+    args = ap.parse_args()
+
+    seasons = args.seasons or list(range(2000, 2026))
+    results = []
+    for s in seasons:
+        try:
+            results.append(await ingest_one_season(season=s, refresh_mlbapi=args.refresh_mlbapi, max_mb=args.max_response_mb, max_depth=args.max_split_depth))
+        except Exception as e:
+            results.append({"season": s, "status": "failed", "error": str(e)})
+
+    out_dir = Path("data/processed/schedule")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "ingest_schedule_summary.json").write_text(pd.DataFrame(results).to_json(orient="records", indent=2), encoding="utf-8")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

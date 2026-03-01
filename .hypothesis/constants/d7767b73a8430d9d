@@ -1,0 +1,4 @@
+# file: /Users/sasank.vishnubhatla/Documents/personal-dev/mlb-winprob/src/winprob/mlbapi/client.py
+# hypothesis_version: 6.151.9
+
+[b'\n', 0.001, 0.5, 1.0, 5.0, 10.0, 20.0, 404, 429, 500, 599, '/', '/api/v1', 'MLBAPIClient', 'Retry-After', '_', 'ab', 'cache_key', 'data/raw/mlb_api', 'endpoint', 'metadata.jsonl', 'params', 'rb', 'status', 'ts_unix', 'url', 'utf-8', 'wb']

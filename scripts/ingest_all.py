@@ -1,0 +1,81 @@
+from __future__ import annotations
+
+import argparse
+import asyncio
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+
+
+@dataclass
+class TaskResult:
+    stage: str
+    season: int
+    status: str
+    error_type: str | None = None
+    error_message: str | None = None
+    duration_seconds: float | None = None
+
+
+async def _run(cmd: str) -> int:
+    proc = await asyncio.create_subprocess_shell(cmd)
+    await proc.wait()
+    return int(proc.returncode)
+
+
+async def run_stage(stage: str, season: int, cmd: str) -> TaskResult:
+    start = asyncio.get_event_loop().time()
+    try:
+        rc = await _run(cmd)
+        dur = asyncio.get_event_loop().time() - start
+        if rc != 0:
+            return TaskResult(stage=stage, season=season, status="failed", error_type="NonZeroExit", error_message=str(rc), duration_seconds=dur)
+        return TaskResult(stage=stage, season=season, status="success", duration_seconds=dur)
+    except Exception as e:
+        dur = asyncio.get_event_loop().time() - start
+        return TaskResult(stage=stage, season=season, status="failed", error_type=type(e).__name__, error_message=str(e), duration_seconds=dur)
+
+
+async def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seasons", nargs="*", type=int, default=[])
+    ap.add_argument("--refresh-mlbapi", action="store_true")
+    ap.add_argument("--refresh-retro", action="store_true")
+    args = ap.parse_args()
+
+    seasons = args.seasons or list(range(2000, 2026))
+    seasons = sorted(set(seasons + [datetime.utcnow().year]))
+
+    results: list[TaskResult] = []
+    mlb_sem = asyncio.Semaphore(4)
+    retro_sem = asyncio.Semaphore(4)
+
+    async def schedule_task(season: int) -> TaskResult:
+        async with mlb_sem:
+            cmd = f"python scripts/ingest_schedule.py --seasons {season}" + (" --refresh-mlbapi" if args.refresh_mlbapi else "")
+            return await run_stage("schedule", season, cmd)
+
+    async def retro_task(season: int) -> TaskResult:
+        async with retro_sem:
+            cmd = f"python scripts/ingest_retrosheet_gamelogs.py --seasons {season}" + (" --refresh" if args.refresh_retro else "")
+            return await run_stage("retrosheet_gamelogs", season, cmd)
+
+    results.extend(await asyncio.gather(*[asyncio.create_task(schedule_task(s)) for s in seasons]))
+    results.extend(await asyncio.gather(*[asyncio.create_task(retro_task(s)) for s in seasons]))
+
+    results.append(await run_stage("crosswalk", -1, "python scripts/build_crosswalk.py --seasons " + " ".join(map(str, seasons))))
+
+    out = Path("data/processed")
+    out.mkdir(parents=True, exist_ok=True)
+    df = pd.DataFrame([r.__dict__ for r in results])
+    df.to_json(out / "ingest_summary.json", orient="records", indent=2)
+    df.to_parquet(out / "ingest_failures.parquet", index=False)
+
+    if (df["status"] == "failed").any():
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

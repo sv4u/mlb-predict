@@ -1,0 +1,18 @@
+From HEAD Mon Sep 17 00:00:00 2001
+From: Hypothesis 6.151.9 <no-reply@hypothesis.works>
+Date: Sun, 01 Mar 2026 03:02:20
+Subject: [PATCH] Hypothesis: add explicit examples
+
+---
+--- ./tests/property/test_properties.py
++++ ./tests/property/test_properties.py
+@@ -212,6 +212,9 @@
+ 
+ 
+ @given(games=st.lists(_game_dict_st(), min_size=0, max_size=20))
++@example(
++    games=[],
++).via('discovered failure')
+ def test_normalize_schedule_rows_never_exceed_input(games: list[dict]) -> None:
+     """normalize_schedule must never produce more rows than games in the input."""
+     raw = {"dates": [{"date": "2024-04-01", "games": games}]}

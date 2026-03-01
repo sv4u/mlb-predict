@@ -1,0 +1,4 @@
+# file: /Users/sasank.vishnubhatla/Documents/personal-dev/mlb-winprob/src/winprob/ingest/id_map.py
+# hypothesis_version: 6.151.9
+
+['mlb_team_id', 'retro_team_code', 'valid_from_season', 'valid_to_season']

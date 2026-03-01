@@ -1,0 +1,335 @@
+# AGENTS.md
+
+## MLB Win Probability Modeling System
+
+### Full Engineering Specification (v2)
+
+------------------------------------------------------------------------
+
+# 1. System Overview
+
+This repository implements a research-grade, reproducible MLB win
+probability modeling platform covering seasons 2000–2025 and the current
+season (regular season only).
+
+The system is designed to:
+
+-   Ingest authoritative historical data
+-   Maintain deterministic provenance
+-   Support lineup-aware and pitcher-aware modeling
+-   Persist prediction history immutably
+-   Track model drift across time
+-   Enable long-term calibration and research analysis
+
+This document defines mandatory architectural, operational, and
+governance rules for all agents contributing to this repository.
+
+------------------------------------------------------------------------
+
+# 2. Architectural Principles
+
+All agents must preserve the following invariants:
+
+1.  Determinism — identical inputs produce identical outputs.
+2.  Provenance — every derived artifact must be traceable.
+3.  Immutability — historical prediction snapshots are never mutated.
+4.  Observability — all stages emit structured artifacts.
+5.  Rate Safety — external APIs must be called through bounded,
+    throttled clients.
+6.  Multi-season support — scripts must accept multiple seasons per run.
+7.  Fail-fast correctness — ambiguous states must raise errors.
+8.  Coverage enforcement — minimum 99.0% crosswalk coverage.
+9.  Storage redundancy — Parquet + CSV where appropriate.
+10. Forward extensibility — no architectural dead-ends.
+
+------------------------------------------------------------------------
+
+# 3. Data Layer Specification
+
+## 3.1 MLB Stats API Wrapper
+
+Location: src/winprob/mlbapi/
+
+Requirements:
+
+-   Async aiohttp client
+-   TokenBucket(rate=5.0, burst=10.0)
+-   Bounded concurrency
+-   Retry with exponential backoff
+-   429 handling
+-   Raw JSON cache
+-   Metadata JSONL logging
+
+Direct API calls outside wrapper are forbidden.
+
+### Cache Metadata Schema
+
+Each request must log:
+
+-   ts_unix
+-   url
+-   params
+-   cache_key
+-   endpoint
+-   status
+
+------------------------------------------------------------------------
+
+## 3.2 Retrosheet Game Logs
+
+Sources:
+
+-   Chadwick GitHub mirror (primary)
+-   Retrosheet.org ZIP (fallback)
+
+On fallback:
+
+-   source_used
+-   url_used
+-   fallback_reason
+-   raw_sha256
+
+Raw TXT must always be preserved.
+
+Attribution requirements per Retrosheet notice must be respected.
+
+------------------------------------------------------------------------
+
+# 4. Data Schemas
+
+## 4.1 Schedule Schema
+
+games\_<season>.parquet
+
+Columns:
+
+-   game_pk (int)
+-   season (int)
+-   game_date_utc (ISO string)
+-   game_date_local (ISO string)
+-   home_mlb_id (int)
+-   away_mlb_id (int)
+-   home_abbrev (str)
+-   away_abbrev (str)
+-   venue_id (int)
+-   local_timezone (str)
+-   double_header (str)
+-   game_number (int)
+-   status (str)
+
+Checksum file:
+
+games\_<season>.checksum.json
+
+Includes:
+
+-   row_count
+-   parquet_sha256
+-   csv_sha256
+-   raw_payloads_sha256
+-   mlbapi_config
+
+------------------------------------------------------------------------
+
+## 4.2 Retrosheet Schema
+
+gamelogs\_<season>.parquet
+
+Columns derived from official GL format.
+
+Mandatory normalized fields:
+
+-   date (date)
+-   game_num (int)
+-   visiting_team (str)
+-   home_team (str)
+-   visiting_score (int)
+-   home_score (int)
+-   visiting_starting_pitcher_id
+-   home_starting_pitcher_id
+
+Checksum file required.
+
+------------------------------------------------------------------------
+
+## 4.3 Crosswalk Schema
+
+game_id_map\_<season>.parquet
+
+Columns:
+
+-   date
+-   home_mlb_id
+-   away_mlb_id
+-   home_retro
+-   away_retro
+-   dh_game_num
+-   status (matched\|missing\|ambiguous)
+-   mlb_game_pk
+-   match_confidence
+-   notes
+
+Coverage report:
+
+crosswalk_coverage_report.parquet
+
+Coverage threshold: 99.0% minimum.
+
+------------------------------------------------------------------------
+
+# 5. Prediction Snapshot Specification
+
+Location:
+
+data/processed/predictions/season=YYYY/snapshots/
+
+Filename:
+
+run_ts=<ISO>.parquet
+
+Mandatory columns:
+
+-   game_pk
+-   home_team
+-   away_team
+-   predicted_home_win_prob
+-   run_ts_utc
+-   model_version
+-   schedule_hash
+-   feature_hash
+-   lineup_param_hash
+-   starter_param_hash
+-   git_commit
+-   tag (nullable)
+
+Snapshots are immutable.
+
+------------------------------------------------------------------------
+
+# 6. Drift Specification
+
+Each run must compute:
+
+1.  Incremental diff (vs previous snapshot)
+2.  Baseline diff (vs first snapshot of season)
+
+Diff schema:
+
+-   game_pk
+-   p_old
+-   p_new
+-   delta
+-   abs_delta
+-   direction
+
+Run metrics schema:
+
+-   mean_abs_delta
+-   p95_abs_delta
+-   max_abs_delta
+-   pct_gt_0p01
+-   pct_gt_0p02
+-   pct_gt_0p05
+
+Logs:
+
+-   season run_metrics.parquet
+-   global_run_metrics.parquet (deduplicated by season + run_ts_utc)
+
+run_ts_utc is auto-generated and immutable.
+
+------------------------------------------------------------------------
+
+# 7. Feature Engineering Contract
+
+Future feature modules must:
+
+-   Accept season-scoped data
+-   Produce deterministic feature matrices
+-   Persist feature_hash
+-   Be reproducible from raw inputs
+
+No feature randomness allowed without seeded RNG recorded in metadata.
+
+------------------------------------------------------------------------
+
+# 8. Modeling Contract
+
+Baseline model:
+
+-   Logistic regression
+
+Planned extensions:
+
+-   Pitcher strength priors
+-   Lineup Monte Carlo simulation
+-   Hierarchical team priors
+-   Calibration layer
+
+Model artifacts must include:
+
+-   model_version
+-   training_seasons
+-   hyperparameters
+-   feature_set_version
+
+------------------------------------------------------------------------
+
+# 9. Error Taxonomy
+
+All failures must classify into:
+
+-   IngestionError
+-   APIError
+-   CoverageError
+-   SchemaError
+-   DriftComputationError
+-   SnapshotIntegrityError
+
+Silent failure is forbidden.
+
+------------------------------------------------------------------------
+
+# 10. Governance Rules
+
+Agents must NOT:
+
+-   Modify historical snapshots
+-   Delete drift logs
+-   Change coverage threshold
+-   Introduce uncontrolled API concurrency
+-   Remove provenance metadata
+-   Introduce nondeterministic randomness
+
+------------------------------------------------------------------------
+
+# 11. Roadmap
+
+Planned modules:
+
+1.  Feature engineering pipeline
+2.  Pitcher modeling
+3.  Lineup expectation engine
+4.  Monte Carlo simulation
+5.  Calibration engine
+6.  Market comparison module
+7.  Explanation interface
+
+------------------------------------------------------------------------
+
+# 12. Long-Term Intent
+
+This repository is designed as a durable sabermetric research system.
+
+Primary goals:
+
+-   Auditability
+-   Longitudinal drift study
+-   Model explainability
+-   Stable evolution over many seasons
+
+Agents must preserve system integrity across time.
+
+------------------------------------------------------------------------
+
+END OF AGENTS.md (v2)
