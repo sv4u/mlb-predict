@@ -40,7 +40,7 @@ import lightgbm as lgb
 import xgboost as xgb
 
 from winprob.features.builder import FEATURE_COLS
-from winprob.model.artifacts import ModelMetadata, save_model
+from winprob.model.artifacts import ModelMetadata, load_model, save_model
 from winprob.model.evaluate import evaluate, EvalResult
 
 logger = logging.getLogger(__name__)
@@ -122,6 +122,32 @@ class PlattCalibrator:
         return getattr(self.base, "booster_", None)
 
 
+class StackedEnsemble:
+    """Meta-learner over calibrated base-model probabilities.
+
+    Wraps ``base_models`` (dict of PlattCalibrator-wrapped models) and a
+    logistic-regression meta-learner so the whole ensemble can be persisted
+    as a single joblib artifact and loaded by ``data_cache.startup()``.
+    """
+
+    def __init__(
+        self,
+        base_models: dict[str, Any],
+        meta_lr: LogisticRegression,
+        base_keys: list[str],
+    ) -> None:
+        self.base_models = base_models
+        self.meta_lr = meta_lr
+        self.base_keys = base_keys
+
+    def predict_proba(self, X: Any) -> np.ndarray:
+        """Return shape (n, 2) probability array (mirrors sklearn API)."""
+        preds = np.column_stack(
+            [_predict_proba(self.base_models[k], X) for k in self.base_keys]
+        )
+        return self.meta_lr.predict_proba(preds)
+
+
 # ---------------------------------------------------------------------------
 # Time weighting
 # ---------------------------------------------------------------------------
@@ -165,7 +191,7 @@ def _raw_proba(model: Any, X: np.ndarray | pd.DataFrame) -> np.ndarray:
 
 
 def _predict_proba(model: Any, X: np.ndarray | pd.DataFrame) -> np.ndarray:
-    if isinstance(model, PlattCalibrator):
+    if isinstance(model, (PlattCalibrator, StackedEnsemble)):
         return model.predict_proba(X)[:, 1]
     return _raw_proba(model, X)
 
@@ -473,12 +499,39 @@ def train_production_model(
         trained[mt] = cal
         print(f"  {mt} production model saved")
 
+    # For stacked: supplement base_models with any already-saved artifacts so
+    # that `--models stacked --skip-cv` works without retraining base models.
+    if "stacked" in model_types:
+        from winprob.model.artifacts import latest_artifact as _latest
+        for _bk in ["logistic", "lightgbm", "xgboost"]:
+            if _bk not in base_models:
+                _art = _latest(_bk, model_dir=model_dir, version=_FEATURE_VERSION)
+                if _art is not None:
+                    base_models[_bk], _ = load_model(_art)
+                    print(f"  loaded existing {_bk} artifact for stacking")
+
     base_keys = [k for k in ["logistic", "lightgbm", "xgboost"] if k in base_models]
     if "stacked" in model_types and len(base_keys) >= 2:
         cal_preds = np.column_stack([_predict_proba(base_models[k], X_cal) for k in base_keys])
         meta_lr = LogisticRegression(**_META_PARAMS)
         meta_lr.fit(cal_preds, y_cal)
-        trained["stacked"] = (base_models, meta_lr, base_keys)
-        print("  stacked ensemble production model saved (in-memory)")
+        ensemble = StackedEnsemble(
+            base_models={k: base_models[k] for k in base_keys},
+            meta_lr=meta_lr,
+            base_keys=base_keys,
+        )
+        meta = ModelMetadata(
+            model_version=_FEATURE_VERSION,
+            model_type="stacked",
+            training_seasons=seasons,
+            hyperparameters={"meta": _META_PARAMS},
+            feature_set_version=_FEATURE_VERSION,
+            feature_cols=FEATURE_COLS,
+            train_brier=0.0,
+            train_n_games=len(X_cal),
+        )
+        save_model(ensemble, meta, model_dir=model_dir)
+        trained["stacked"] = ensemble
+        print("  stacked production model saved")
 
     return trained
