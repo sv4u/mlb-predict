@@ -93,16 +93,17 @@ def _ingest_commands() -> list[tuple[str, str]]:
     python = shutil.which("python") or "python"
 
     return [
-        ("Refresh schedule (MLB Stats API)",
-         f"{python} scripts/ingest_schedule.py --seasons {year} --refresh-mlbapi"),
-        ("Refresh Retrosheet gamelogs",
-         f"{python} scripts/ingest_retrosheet_gamelogs.py --seasons {year} --refresh"),
-        ("Rebuild crosswalk",
-         f"{python} scripts/build_crosswalk.py --seasons {year}"),
-        ("Rebuild feature matrix",
-         f"{python} scripts/build_features.py --seasons {year}"),
-        ("Rebuild 2026 pre-season features",
-         f"{python} scripts/build_features_2026.py"),
+        (
+            "Refresh schedule (MLB Stats API)",
+            f"{python} scripts/ingest_schedule.py --seasons {year} --refresh-mlbapi",
+        ),
+        (
+            "Refresh Retrosheet gamelogs",
+            f"{python} scripts/ingest_retrosheet_gamelogs.py --seasons {year} --refresh",
+        ),
+        ("Rebuild crosswalk", f"{python} scripts/build_crosswalk.py --seasons {year}"),
+        ("Rebuild feature matrix", f"{python} scripts/build_features.py --seasons {year}"),
+        ("Rebuild 2026 pre-season features", f"{python} scripts/build_features_2026.py"),
     ]
 
 
@@ -113,8 +114,7 @@ def _retrain_commands() -> list[tuple[str, str]]:
     python = shutil.which("python") or "python"
     models = "logistic lightgbm xgboost catboost mlp stacked"
     return [
-        ("Train all production models",
-         f"{python} scripts/train_model.py --models {models}"),
+        ("Train all production models", f"{python} scripts/train_model.py --models {models}"),
     ]
 
 
@@ -257,13 +257,15 @@ def gather_model_status() -> dict[str, Any]:
                         meta = json.loads(meta_path.read_text())
                     except Exception:
                         pass
-                models_found.append({
-                    "name": d.name,
-                    "model_type": meta.get("model_type", d.name.split("_")[0]),
-                    "version": meta.get("version", "unknown"),
-                    "training_seasons": meta.get("training_seasons"),
-                    "trained_at": meta.get("trained_at"),
-                })
+                models_found.append(
+                    {
+                        "name": d.name,
+                        "model_type": meta.get("model_type", d.name.split("_")[0]),
+                        "version": meta.get("version", "unknown"),
+                        "training_seasons": meta.get("training_seasons"),
+                        "trained_at": meta.get("trained_at"),
+                    }
+                )
 
     cv_summary: list[dict[str, Any]] = []
     for name in ("cv_summary_v3.json", "cv_summary_v2.json", "cv_summary.json"):

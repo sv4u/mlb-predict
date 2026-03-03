@@ -391,7 +391,9 @@ def build_feature_matrix(
     team_feats_season = team_feats.iloc[season_mask].reset_index(drop=True)
 
     # --- Lineup continuity (optional: requires batting order columns) --------
-    lineup_cols = [f"home_{i}_id" for i in range(1, 10)] + [f"visiting_{i}_id" for i in range(1, 10)]
+    lineup_cols = [f"home_{i}_id" for i in range(1, 10)] + [
+        f"visiting_{i}_id" for i in range(1, 10)
+    ]
     if all(c in gamelogs_all.columns for c in lineup_cols):
         try:
             lineup_all = build_lineup_features(gamelogs_all).sort_index()
@@ -405,7 +407,12 @@ def build_feature_matrix(
     sp_feats = _pitcher_api_features(gl, prior_api_map)
 
     # --- In-season gamelog pitcher ERA (Bayesian shrinkage) + blend with API -
-    required_er_cols = ["home_er", "visiting_er", "home_starting_pitcher_id", "visiting_starting_pitcher_id"]
+    required_er_cols = [
+        "home_er",
+        "visiting_er",
+        "home_starting_pitcher_id",
+        "visiting_starting_pitcher_id",
+    ]
     if all(c in gamelogs_all.columns for c in required_er_cols):
         try:
             pitcher_gamelog_all = build_pitcher_stats(gamelogs_all).sort_index()
@@ -418,12 +425,12 @@ def build_feature_matrix(
             )
             w_home = (1.0 - _SHRINKAGE_PRIOR_W) * (n_starts_h / _MIN_STARTS_FOR_BLEND)
             w_away = (1.0 - _SHRINKAGE_PRIOR_W) * (n_starts_a / _MIN_STARTS_FOR_BLEND)
-            sp_feats["home_sp_era"] = (
-                (1.0 - w_home) * sp_feats["home_sp_era"] + w_home * pitcher_season["home_sp_era"].values
-            )
-            sp_feats["away_sp_era"] = (
-                (1.0 - w_away) * sp_feats["away_sp_era"] + w_away * pitcher_season["away_sp_era"].values
-            )
+            sp_feats["home_sp_era"] = (1.0 - w_home) * sp_feats[
+                "home_sp_era"
+            ] + w_home * pitcher_season["home_sp_era"].values
+            sp_feats["away_sp_era"] = (1.0 - w_away) * sp_feats[
+                "away_sp_era"
+            ] + w_away * pitcher_season["away_sp_era"].values
         except Exception:
             pass  # keep API-only stats if gamelog blend fails
 
@@ -486,7 +493,10 @@ def build_feature_matrix(
         combined["away_lineup_continuity"] = 4.5
 
     # --- Bullpen usage / ERA proxy (optional) ---------------------------------
-    if "home_pitchers_used" in gamelogs_all.columns and "visiting_pitchers_used" in gamelogs_all.columns:
+    if (
+        "home_pitchers_used" in gamelogs_all.columns
+        and "visiting_pitchers_used" in gamelogs_all.columns
+    ):
         try:
             bullpen_all = build_bullpen_features(gamelogs_all).sort_index()
             bullpen_season = bullpen_all.iloc[season_mask].reset_index(drop=True)
@@ -494,21 +504,29 @@ def build_feature_matrix(
                 combined[col] = bullpen_season[col].values
         except Exception:
             for c in [
-                "home_bullpen_usage_15", "home_bullpen_usage_30",
-                "away_bullpen_usage_15", "away_bullpen_usage_30",
-                "home_bullpen_era_proxy_15", "home_bullpen_era_proxy_30",
-                "away_bullpen_era_proxy_15", "away_bullpen_era_proxy_30",
+                "home_bullpen_usage_15",
+                "home_bullpen_usage_30",
+                "away_bullpen_usage_15",
+                "away_bullpen_usage_30",
+                "home_bullpen_era_proxy_15",
+                "home_bullpen_era_proxy_30",
+                "away_bullpen_era_proxy_15",
+                "away_bullpen_era_proxy_30",
             ]:
                 combined[c] = 2.0 if "usage" in c else 4.5
     else:
         for c in [
-            "home_bullpen_usage_15", "home_bullpen_usage_30",
-            "away_bullpen_usage_15", "away_bullpen_usage_30",
+            "home_bullpen_usage_15",
+            "home_bullpen_usage_30",
+            "away_bullpen_usage_15",
+            "away_bullpen_usage_30",
         ]:
             combined[c] = 2.0
         for c in [
-            "home_bullpen_era_proxy_15", "home_bullpen_era_proxy_30",
-            "away_bullpen_era_proxy_15", "away_bullpen_era_proxy_30",
+            "home_bullpen_era_proxy_15",
+            "home_bullpen_era_proxy_30",
+            "away_bullpen_era_proxy_15",
+            "away_bullpen_era_proxy_30",
         ]:
             combined[c] = 4.5
 
@@ -598,9 +616,7 @@ def build_feature_matrix(
     combined["whip_diff"] = combined.get("away_pit_whip", 1.30) - combined.get(
         "home_pit_whip", 1.30
     )
-    combined["iso_diff"] = combined.get("home_bat_iso", 0.170) - combined.get(
-        "away_bat_iso", 0.170
-    )
+    combined["iso_diff"] = combined.get("home_bat_iso", 0.170) - combined.get("away_bat_iso", 0.170)
 
     # --- Join crosswalk to get game_pk and MLB team IDs ---------------------
     cw_matched = crosswalk[crosswalk["status"] == "matched"][

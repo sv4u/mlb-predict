@@ -20,10 +20,17 @@ from winprob.external.weather import (
     fetch_weather_uncached,
 )
 
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Ingest historical weather for games from Open-Meteo")
     ap.add_argument("--processed-dir", type=Path, default=Path("data/processed"))
-    ap.add_argument("--seasons", nargs="*", type=int, default=[], help="Seasons to process (default: all with gamelogs)")
+    ap.add_argument(
+        "--seasons",
+        nargs="*",
+        type=int,
+        default=[],
+        help="Seasons to process (default: all with gamelogs)",
+    )
     args = ap.parse_args()
 
     weather_dir = args.processed_dir / "weather"
@@ -61,14 +68,20 @@ def main() -> None:
             existing_keys.add(key)
             w = fetch_weather_uncached(park_id, game_date)
             if w is None:
-                w = {"temp_f": _NEUTRAL_TEMP_F, "wind_mph": _NEUTRAL_WIND_MPH, "humidity": _NEUTRAL_HUMIDITY}
-            rows.append({
-                "game_date": game_date,
-                "park_id": park_id,
-                "temp_f": w["temp_f"],
-                "wind_mph": w["wind_mph"],
-                "humidity": w["humidity"],
-            })
+                w = {
+                    "temp_f": _NEUTRAL_TEMP_F,
+                    "wind_mph": _NEUTRAL_WIND_MPH,
+                    "humidity": _NEUTRAL_HUMIDITY,
+                }
+            rows.append(
+                {
+                    "game_date": game_date,
+                    "park_id": park_id,
+                    "temp_f": w["temp_f"],
+                    "wind_mph": w["wind_mph"],
+                    "humidity": w["humidity"],
+                }
+            )
 
     if rows:
         new_df = pd.DataFrame(rows)

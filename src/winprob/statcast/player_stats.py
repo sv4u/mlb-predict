@@ -152,6 +152,7 @@ def build_lineup_statcast_features(
     away_barrel = []
 
     for idx, row in gamelogs.iterrows():
+
         def lineup_avg(id_cols: list[str], stat_col: str, default: float) -> float:
             vals = []
             for c in id_cols:
@@ -208,6 +209,7 @@ def build_pitcher_statcast_features(
     away_est = []
 
     for idx, row in gamelogs.iterrows():
+
         def lookup(col: str) -> float:
             rid = row.get(col)
             if pd.isna(rid) or rid == "":

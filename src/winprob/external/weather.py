@@ -134,7 +134,11 @@ def get_weather_for_game(park_id: str, game_date: str, weather_dir: Path) -> dic
     time.sleep(_REQUEST_DELAY_S)
     out = _fetch_openmeteo(coords[0], coords[1], game_date)
     if out is None:
-        return {"temp_f": _NEUTRAL_TEMP_F, "wind_mph": _NEUTRAL_WIND_MPH, "humidity": _NEUTRAL_HUMIDITY}
+        return {
+            "temp_f": _NEUTRAL_TEMP_F,
+            "wind_mph": _NEUTRAL_WIND_MPH,
+            "humidity": _NEUTRAL_HUMIDITY,
+        }
     return out
 
 

@@ -211,10 +211,12 @@ def _build_catboost(params: dict[str, Any] | None = None) -> CatBoostClassifier:
 def _build_mlp(params: dict[str, Any] | None = None) -> Pipeline:
     """Feed-forward MLP with StandardScaler (2–3 hidden layers, ReLU, sigmoid output)."""
     p = dict(params or _MLP_PARAMS)
-    return Pipeline([
-        ("scaler", StandardScaler()),
-        ("mlp", MLPClassifier(**p)),
-    ])
+    return Pipeline(
+        [
+            ("scaler", StandardScaler()),
+            ("mlp", MLPClassifier(**p)),
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -453,10 +455,7 @@ def run_expanding_cv(
 
     # Only keep seasons whose feature matrix has all FEATURE_COLS (e.g. drop stale 2026)
     required = set(FEATURE_COLS) | {"home_win"}
-    season_dfs = {
-        s: df for s, df in raw_season_dfs.items()
-        if required.issubset(df.columns)
-    }
+    season_dfs = {s: df for s, df in raw_season_dfs.items() if required.issubset(df.columns)}
     if not season_dfs:
         raise RuntimeError(
             f"No feature files with all required columns in {features_dir}. "
@@ -491,8 +490,17 @@ def run_expanding_cv(
             if mt == "stacked":
                 continue
             params = (
-                lgb_params if mt == "lightgbm"
-                else (xgb_params if mt == "xgboost" else (catboost_params if mt == "catboost" else (mlp_params if mt == "mlp" else None)))
+                lgb_params
+                if mt == "lightgbm"
+                else (
+                    xgb_params
+                    if mt == "xgboost"
+                    else (
+                        catboost_params
+                        if mt == "catboost"
+                        else (mlp_params if mt == "mlp" else None)
+                    )
+                )
             )
             model = _fit_model(mt, X_fit, y_fit, w_fit, _model_params_only(params))
             cal = _calibrate(model, X_cal, y_cal, platt_C=cal_C)
@@ -522,7 +530,9 @@ def run_expanding_cv(
             results[mt].append(_result_row(mt, eval_season, len(X_train), er))
 
         # Stacked ensemble
-        base_keys = [k for k in ["logistic", "lightgbm", "xgboost", "catboost", "mlp"] if k in fitted_models]
+        base_keys = [
+            k for k in ["logistic", "lightgbm", "xgboost", "catboost", "mlp"] if k in fitted_models
+        ]
         if "stacked" in model_types and len(base_keys) >= 2:
             cal_preds = np.column_stack(
                 [_predict_proba(fitted_models[k], X_cal) for k in base_keys]
@@ -597,8 +607,15 @@ def train_production_model(
         if mt == "stacked":
             continue
         params = (
-            lgb_params if mt == "lightgbm"
-            else (xgb_params if mt == "xgboost" else (catboost_params if mt == "catboost" else (mlp_params if mt == "mlp" else None)))
+            lgb_params
+            if mt == "lightgbm"
+            else (
+                xgb_params
+                if mt == "xgboost"
+                else (
+                    catboost_params if mt == "catboost" else (mlp_params if mt == "mlp" else None)
+                )
+            )
         )
         model = _fit_model(mt, X_fit, y_fit, w_fit, _model_params_only(params))
         cal = _calibrate(model, X_cal, y_cal, platt_C=cal_C)

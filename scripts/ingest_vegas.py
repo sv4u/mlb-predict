@@ -61,9 +61,9 @@ def main() -> None:
     out_dir = args.processed_dir / "vegas"
     out_dir.mkdir(parents=True, exist_ok=True)
     for season, g in df.groupby(df["game_date"].apply(lambda d: d.year)):
-        out = g[["game_date", "home_team", "away_team", "vegas_implied_home_win", "vegas_line_movement"]].drop_duplicates(
-            subset=["game_date", "home_team", "away_team"]
-        )
+        out = g[
+            ["game_date", "home_team", "away_team", "vegas_implied_home_win", "vegas_line_movement"]
+        ].drop_duplicates(subset=["game_date", "home_team", "away_team"])
         path = out_dir / f"odds_{season}.parquet"
         out.to_parquet(path, index=False)
         print(f"  {season}: {len(out)} rows → {path}")

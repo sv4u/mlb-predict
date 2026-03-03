@@ -68,7 +68,9 @@ def main() -> None:
             params.get("platt_C"),
         )
 
-    time_decay, platt_C = _training_globals(lgb_params or xgb_params or catboost_params or mlp_params)
+    time_decay, platt_C = _training_globals(
+        lgb_params or xgb_params or catboost_params or mlp_params
+    )
 
     # -------------------------------------------------------------------------
     # Optional Optuna HPO
@@ -150,6 +152,7 @@ def main() -> None:
     if args.feature_importance:
         print("\nRunning feature importance analysis…")
         import subprocess
+
         script_dir = Path(__file__).resolve().parent
         subprocess.run(
             [

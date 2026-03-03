@@ -114,7 +114,9 @@ def main() -> None:
     ap.add_argument("--method", choices=["shap", "permutation"], default="shap")
     ap.add_argument("--max-samples", type=int, default=5000)
     ap.add_argument("--out", type=Path, default=None, help="Write report JSON here")
-    ap.add_argument("--threshold", type=float, default=0.0, help="Flag features below this importance")
+    ap.add_argument(
+        "--threshold", type=float, default=0.0, help="Flag features below this importance"
+    )
     args = ap.parse_args()
 
     artifact_dir = latest_artifact(args.model_type, model_dir=args.model_dir, version="v3")
@@ -134,9 +136,7 @@ def main() -> None:
     y = df["home_win"].values.astype(float)
 
     if args.method == "shap":
-        importance = run_shap_importance(
-            model, X, feature_cols, max_samples=args.max_samples
-        )
+        importance = run_shap_importance(model, X, feature_cols, max_samples=args.max_samples)
     else:
         importance = run_permutation_importance(
             model, X, y, feature_cols, max_samples=args.max_samples
@@ -153,7 +153,9 @@ def main() -> None:
         "low_importance": [f for f, v in importance.items() if v <= args.threshold and v >= 0],
     }
 
-    out_path = args.out or args.model_dir / f"feature_importance_{args.model_type}_{args.method}.json"
+    out_path = (
+        args.out or args.model_dir / f"feature_importance_{args.model_type}_{args.method}.json"
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"Report → {out_path}")

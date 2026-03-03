@@ -212,7 +212,9 @@ def build_team_rolling_stats(
         roll_rs = grp["rs"].rolling(w30, min_periods=5).std().shift(1)
         rows["run_std_30"] = roll_rs.fillna(2.0).values.tolist()  # neutral ~2 runs std
         one_run = (grp["rs"] - grp["ra"]).abs() == 1
-        one_run_win = (one_run.astype(float) * grp["win"]).rolling(w30, min_periods=1).sum().shift(1)
+        one_run_win = (
+            (one_run.astype(float) * grp["win"]).rolling(w30, min_periods=1).sum().shift(1)
+        )
         one_run_n = one_run.astype(float).rolling(w30, min_periods=1).sum().shift(1)
         rows["one_run_win_pct_30"] = (
             (one_run_win / one_run_n.replace(0, np.nan)).fillna(_NEUTRAL_WIN_PCT).values.tolist()
