@@ -6,6 +6,11 @@ on:
     tags: ["v*.*.*"]
   pull_request:
 
+# Cancel in-progress runs for the same branch/PR to avoid wasting minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 # ---------------------------------------------------------------------------
 # Permissions
 #   contents: read   — checkout
@@ -88,21 +93,18 @@ jobs:
         run: uv run pytest tests/ -v --tb=short
 
   # ---------------------------------------------------------------------------
-  # Docker — build image, run pytest inside it, publish to GHCR
+  # Docker — build image and publish to GHCR
   #
   # Depends on all quality-gate jobs so the image is pushed only after the
   # full native test suite passes.
   #
   # Multi-platform strategy:
-  #   • The test image is built for linux/amd64 only (must match the runner
-  #     to use `load: true` for `docker run`).
-  #   • The production image is built for linux/amd64 + linux/arm64.
-  #     On PRs, amd64-only (fast); on push to main/tags, both arches (pushed).
+  #   • PRs         → linux/amd64 only, no push (fast validation)
+  #   • push main   → linux/amd64 only, pushed to GHCR (fast iteration)
+  #   • version tag → linux/amd64 + linux/arm64, pushed (full release)
   #
-  # Push behaviour:
-  #   pull_request  → build only (no push)
-  #   push to main  → push :main + :sha-<short>
-  #   push of tag   → push semver tags (e.g. v1.2.3 → :1.2.3, :1.2)
+  # arm64 via QEMU emulation is slow (~5–8 min extra), so it only runs on
+  # tagged releases where the multi-arch image is needed for ARM deployment.
   # ---------------------------------------------------------------------------
   docker:
     name: Docker — build & publish
@@ -113,10 +115,10 @@ jobs:
       - uses: actions/checkout@v4
 
       # -----------------------------------------------------------------------
-      # QEMU — enables building linux/arm64 images on the amd64 runner via
-      # software emulation.  Needed for the multi-platform production build.
+      # QEMU — only needed for arm64 cross-compilation on version tags
       # -----------------------------------------------------------------------
       - name: Set up QEMU
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: docker/setup-qemu-action@v3
 
       # -----------------------------------------------------------------------
@@ -156,47 +158,27 @@ jobs:
             type=sha,prefix=sha-,format=short
 
       # -----------------------------------------------------------------------
-      # Build the test stage (linux/amd64 only — must match runner arch so
-      # `load: true` can expose the image to `docker run`).
-      # GHA layer cache is shared with the production build that follows.
-      # -----------------------------------------------------------------------
-      - name: Build test image (amd64)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: test
-          platforms: linux/amd64
-          push: false
-          load: true
-          tags: mlb-winprob:ci-test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Run pytest inside Docker
-        run: |
-          docker run --rm \
-            --entrypoint python \
-            mlb-winprob:ci-test \
-            -m pytest tests/ -v --tb=short
-
-      # -----------------------------------------------------------------------
       # Build and push the production image.
       #
       # Platform strategy:
-      #   PR builds   → linux/amd64 only (fast; validates build without pushing)
-      #   main/tag    → linux/amd64 + linux/arm64 (full multi-arch; pushed to GHCR)
+      #   PR builds    → linux/amd64 only (fast; validates build without pushing)
+      #   push to main → linux/amd64 only (fast iteration; pushed to GHCR)
+      #   version tag  → linux/amd64 + linux/arm64 (full release; pushed)
       #
-      # arm64 is required so the image runs on ARM-based NAS devices (Synology,
-      # QNAP, etc.) and ARM cloud VMs (AWS Graviton, Oracle Ampere, etc.).
+      # arm64 is required for ARM-based NAS devices (Synology, QNAP, etc.)
+      # and ARM cloud VMs (AWS Graviton, Oracle Ampere, etc.) but only
+      # built on tagged releases to keep CI fast for everyday pushes.
       # -----------------------------------------------------------------------
       - name: Build and push production image
         uses: docker/build-push-action@v6
         with:
           context: .
           target: production
-          platforms: ${{ github.event_name != 'pull_request' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          platforms: ${{ startsWith(github.ref, 'refs/tags/v') && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

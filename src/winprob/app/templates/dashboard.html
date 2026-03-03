@@ -103,7 +103,8 @@
 <body>
 <header>
   <h1>⚾ MLB Win Probability</h1>
-  <span>Admin Dashboard</span>
+  <span>Admin Dashboard • <code
+      style="font-size:0.72rem;background:var(--card);padding:0.15rem 0.4rem;border-radius:4px;color:var(--accent)">{{ git_commit }}</code></span>
   <nav style="margin-left:auto;display:flex;gap:0.6rem">
     <a href="/" class="nav-link">All Seasons</a>
     <a href="/season/2026" class="nav-link">2026 Season</a>
@@ -142,6 +143,11 @@
       <div class="label">Best Brier Score</div>
       <div class="value" id="sc-brier">—</div>
       <div class="sub" id="sc-brier-sub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Git Commit</div>
+      <div class="value" id="sc-commit" style="font-size:1.1rem;font-family:'SF Mono','Fira Code',monospace">—</div>
+      <div class="sub" id="sc-commit-sub">v3.0</div>
     </div>
   </div>
 
@@ -251,6 +257,11 @@ function renderOverview(s) {
 
   document.getElementById('sc-ingest').textContent = fmtDate(s.data.last_ingest);
   document.getElementById('sc-retrain').textContent = fmtDate(s.models.last_retrain);
+
+  if (s.git_commit) {
+    document.getElementById('sc-commit').textContent = s.git_commit;
+    document.getElementById('sc-commit-sub').textContent = 'v' + (s.version || '3.0');
+  }
 
   const cv = s.models.cv_summary || [];
   if (cv.length) {

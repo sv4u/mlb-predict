@@ -3,7 +3,7 @@
 #
 # Stages
 # ------
-#   base        System deps + supercronic + Python package (editable install)
+#   base        System deps + supercronic + uv + Python package install
 #   test        base + dev dependencies + tests/ — used by CI to run pytest
 #   production  base + scripts + docker helpers — what runs in production
 #               (default build target; pushed to GHCR)
@@ -27,12 +27,6 @@
 # =============================================================================
 FROM python:3.11-slim AS base
 
-# ---------------------------------------------------------------------------
-# Python environment flags
-#   PYTHONUNBUFFERED=1           — flush stdout/stderr immediately so
-#                                  `docker logs -f` shows output in real time
-#   PYTHONDONTWRITEBYTECODE=1    — skip .pyc file creation inside the image
-# ---------------------------------------------------------------------------
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
@@ -54,11 +48,6 @@ RUN apt-get update \
 
 # ---------------------------------------------------------------------------
 # supercronic — Docker-friendly cron daemon that logs to stdout/stderr
-#
-# TARGETARCH is a BuildKit built-in ARG (set automatically by --platform).
-# It maps platform slugs to supercronic binary names:
-#   linux/amd64  → TARGETARCH=amd64  → supercronic-linux-amd64
-#   linux/arm64  → TARGETARCH=arm64  → supercronic-linux-arm64
 # ---------------------------------------------------------------------------
 ARG TARGETARCH=amd64
 ARG SUPERCRONIC_VERSION=0.2.33
@@ -68,21 +57,30 @@ RUN curl -fsSL \
     -o /usr/local/bin/supercronic \
     && chmod +x /usr/local/bin/supercronic
 
+# ---------------------------------------------------------------------------
+# uv — fast Python package installer (10-100x faster than pip)
+# ---------------------------------------------------------------------------
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 WORKDIR /app
 
 # ---------------------------------------------------------------------------
-# Python package
+# Python dependencies — cached layer
 #
-# Editable install is intentional: data_cache.py resolves data/ and models/
-# relative to __file__, which only works when source lives at /app/src/.
-# Layout: /app/src/winprob/app/data_cache.py → .parent×4 = /app  ✓
-#
-# Layer order: pyproject.toml + src/ first so script-only rebuilds reuse cache.
+# Strategy: copy pyproject.toml + create a minimal package stub so that
+# `uv pip install -e .` succeeds and caches the heavy dependency layer.
+# The real source code is copied afterwards; only that COPY rebuilds when
+# code changes (deps stay cached).
 # ---------------------------------------------------------------------------
 COPY pyproject.toml .
-COPY src/ src/
+RUN mkdir -p src/winprob && touch src/winprob/__init__.py
+RUN uv pip install --system --no-cache --compile-bytecode -e .
 
-RUN pip install --no-cache-dir -e .
+# ---------------------------------------------------------------------------
+# Source code — this layer rebuilds on every code change, but all deps
+# above are already cached so it's nearly instant.
+# ---------------------------------------------------------------------------
+COPY src/ src/
 
 
 # =============================================================================
@@ -92,7 +90,7 @@ RUN pip install --no-cache-dir -e .
 # =============================================================================
 FROM base AS test
 
-RUN pip install --no-cache-dir -e ".[dev]"
+RUN uv pip install --system --no-cache --compile-bytecode -e ".[dev]"
 
 COPY tests/ tests/
 
@@ -108,16 +106,16 @@ FROM base AS production
 COPY scripts/ scripts/
 COPY docker/  docker/
 
+# Bake the git commit hash into the image (passed via --build-arg or CI).
+ARG GIT_COMMIT=unknown
+RUN echo "${GIT_COMMIT}" > /app/GIT_COMMIT
+
 RUN chmod +x docker/entrypoint.sh \
     docker/ingest_daily.sh \
     docker/retrain_daily.sh
 
 # ---------------------------------------------------------------------------
 # Runtime directories
-#
-# Created before VOLUME so they exist in the image layer.  When docker-compose
-# provides bind mounts for /app/data and /app/logs the bind mounts take
-# precedence and the entrypoint creates any missing subdirectories.
 # ---------------------------------------------------------------------------
 RUN mkdir -p data/raw data/processed data/processed/statcast_player \
     data/processed/vegas data/processed/weather data/models logs

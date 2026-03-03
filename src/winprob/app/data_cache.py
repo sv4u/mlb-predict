@@ -6,6 +6,7 @@ Loads all feature data and the production model once at startup.
 from __future__ import annotations
 
 import logging
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +25,33 @@ _features: pd.DataFrame | None = None
 _model: object | None = None
 _meta: object | None = None
 _feature_cols: list[str] = []
+_git_commit: str = "unknown"
+
+
+def _resolve_git_commit() -> str:
+    """Read the current HEAD commit hash (short) from git or a baked-in file."""
+    stamp_file = _REPO_ROOT / "GIT_COMMIT"
+    if stamp_file.exists():
+        return stamp_file.read_text().strip()[:12]
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short=8", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=str(_REPO_ROOT),
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return "unknown"
+
+
+def get_git_commit() -> str:
+    """Return the resolved git commit hash."""
+    return _git_commit
+
 
 # Retrosheet code → full name
 TEAM_NAMES: dict[str, str] = {
@@ -67,7 +95,9 @@ TEAM_ABBREVS: dict[str, str] = {v: k for k, v in TEAM_NAMES.items()}  # name →
 
 def startup(model_type: str = "logistic") -> None:
     """Load features and model into memory.  Called once at application startup."""
-    global _features, _model, _meta, _feature_cols
+    global _features, _model, _meta, _feature_cols, _git_commit
+
+    _git_commit = _resolve_git_commit()
 
     logger.info("Loading feature data…")
     frames = [

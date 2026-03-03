@@ -24,6 +24,7 @@ from winprob.app.admin import (
 from winprob.app.data_cache import (
     TEAM_NAMES,
     get_features,
+    get_git_commit,
     get_model,
     startup,
 )
@@ -53,6 +54,15 @@ async def _startup() -> None:
 # ---------------------------------------------------------------------------
 # API endpoints
 # ---------------------------------------------------------------------------
+
+
+@app.get("/api/version")
+def api_version() -> dict:
+    """Return the current application version and git commit hash."""
+    return {
+        "version": "3.0",
+        "git_commit": get_git_commit(),
+    }
 
 
 @app.get("/api/seasons")
@@ -256,14 +266,19 @@ def api_cv_summary() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
+def _ctx(request: Request, **extra: object) -> dict:
+    """Build a base template context with version info."""
+    return {"request": request, "git_commit": get_git_commit(), **extra}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def page_home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("index.html", _ctx(request))
 
 
 @app.get("/game/{game_pk}", response_class=HTMLResponse)
 async def page_game(request: Request, game_pk: int):
-    return templates.TemplateResponse("game.html", {"request": request, "game_pk": game_pk})
+    return templates.TemplateResponse("game.html", _ctx(request, game_pk=game_pk))
 
 
 @app.get("/season/2026", response_class=HTMLResponse)
@@ -275,14 +290,14 @@ async def page_season_2026(request: Request):
     first_date = str(season_df["date"].min())[:10] if total else "—"
     return templates.TemplateResponse(
         "season_2026.html",
-        {"request": request, "total_games": total, "first_date": first_date},
+        _ctx(request, total_games=total, first_date=first_date),
     )
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def page_dashboard(request: Request):
     """Admin dashboard with retrain/ingest controls and system status."""
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    return templates.TemplateResponse("dashboard.html", _ctx(request))
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +309,8 @@ async def page_dashboard(request: Request):
 def api_admin_status() -> dict:
     """Full system status: data coverage, model inventory, pipeline states."""
     return {
+        "version": "3.0",
+        "git_commit": get_git_commit(),
         "data": gather_data_status(),
         "models": gather_model_status(),
         "pipelines": {
