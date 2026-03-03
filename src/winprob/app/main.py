@@ -17,7 +17,6 @@ from fastapi.templating import Jinja2Templates
 
 from winprob.app.admin import (
     PipelineKind,
-    PipelineStatus,
     conflicting_pipeline,
     gather_data_status,
     gather_model_status,
@@ -355,7 +354,10 @@ async def api_admin_ingest() -> dict:
     """Full re-ingestion: clears all processed data and re-ingests every season."""
     blocker = conflicting_pipeline()
     if blocker is not None:
-        return {"ok": False, "message": f"Cannot start ingest — {blocker.value} pipeline is running."}
+        return {
+            "ok": False,
+            "message": f"Cannot start ingest — {blocker.value} pipeline is running.",
+        }
     asyncio.create_task(run_pipeline(PipelineKind.INGEST, on_success=_reload_app))
     return {"ok": True, "message": "Full re-ingestion started."}
 
@@ -365,7 +367,10 @@ async def api_admin_update() -> dict:
     """Update current season data only (non-destructive)."""
     blocker = conflicting_pipeline()
     if blocker is not None:
-        return {"ok": False, "message": f"Cannot start update — {blocker.value} pipeline is running."}
+        return {
+            "ok": False,
+            "message": f"Cannot start update — {blocker.value} pipeline is running.",
+        }
     asyncio.create_task(run_pipeline(PipelineKind.UPDATE, on_success=_reload_app))
     return {"ok": True, "message": "Season update started."}
 
@@ -375,6 +380,9 @@ async def api_admin_retrain() -> dict:
     """Clear all model artifacts and retrain from scratch."""
     blocker = conflicting_pipeline()
     if blocker is not None:
-        return {"ok": False, "message": f"Cannot start retrain — {blocker.value} pipeline is running."}
+        return {
+            "ok": False,
+            "message": f"Cannot start retrain — {blocker.value} pipeline is running.",
+        }
     asyncio.create_task(run_pipeline(PipelineKind.RETRAIN, on_success=_reload_app))
     return {"ok": True, "message": "Retrain pipeline started."}

@@ -76,9 +76,7 @@ def main() -> None:
 
     if not rows:
         logger.warning("No seasons produced crosswalk results — writing empty coverage report")
-        cov = pd.DataFrame(
-            columns=["season", "coverage_pct", "matched", "missing", "ambiguous"]
-        )
+        cov = pd.DataFrame(columns=["season", "coverage_pct", "matched", "missing", "ambiguous"])
     else:
         cov = pd.DataFrame(rows).sort_values("season")
 

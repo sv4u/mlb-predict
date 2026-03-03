@@ -253,9 +253,7 @@ async def run_pipeline(
 
     blocker = conflicting_pipeline()
     if blocker is not None:
-        logger.warning(
-            "Pipeline %s blocked — %s is already running", kind.value, blocker.value
-        )
+        logger.warning("Pipeline %s blocked — %s is already running", kind.value, blocker.value)
         return
 
     state.reset()
