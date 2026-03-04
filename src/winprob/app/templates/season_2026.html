@@ -61,6 +61,27 @@
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
+    /* Standings summary */
+    .standings-summary { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; }
+    .standings-summary h3 { font-size: 0.88rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.6rem; }
+    .standings-summary h3 a { font-size: 0.78rem; font-weight: 400; text-transform: none; letter-spacing: normal; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
+    .summary-div { background: var(--card); border-radius: 8px; padding: 0.85rem; }
+    .summary-div-header { font-size: 0.78rem; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem; }
+    .summary-div-badge { display: inline-block; padding: 0.12rem 0.4rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; }
+    .badge-al { background: rgba(79,142,247,.12); color: var(--accent); }
+    .badge-nl { background: rgba(231,76,142,.12); color: #e74c8e; }
+    .summary-team-row { display: flex; justify-content: space-between; align-items: center; padding: 0.22rem 0; font-size: 0.8rem; }
+    .summary-team-row .rank { color: var(--muted); width: 1.2rem; text-align: right; margin-right: 0.4rem; }
+    .summary-team-row .name { flex: 1; font-weight: 500; }
+    .summary-team-row .record { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .summary-leader-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+    @media (max-width: 700px) { .summary-leader-cards { grid-template-columns: 1fr; } }
+    .leader-mini { background: var(--card); border-radius: 8px; padding: 0.75rem; }
+    .leader-mini-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 0.35rem; }
+    .leader-mini-team { font-size: 0.95rem; font-weight: 700; }
+    .leader-mini-record { font-size: 0.82rem; color: var(--muted); }
+
     /* Team power rankings sidebar */
     .layout { display: grid; grid-template-columns: 1fr 260px; gap: 1.25rem; align-items: start; }
     @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
@@ -83,8 +104,10 @@
   <nav>
     <a href="/">All Seasons</a>
     <a href="/season/2026" class="active">2026 Season</a>
+    <a href="/standings">Standings</a>
     <a href="/wiki">Wiki</a>
     <a href="/dashboard">Dashboard</a>
+    <a href="/sitemap">Sitemap</a>
   </nav>
 </header>
 
@@ -110,6 +133,13 @@
     <strong>Pre-season note:</strong> All predictions are based on 2025 end-of-season team strength.
     Roster moves, trades, spring training injuries, and 2026 in-season results will shift these
     probabilities once the pipeline is re-run with live data.
+  </div>
+
+  <!-- Standings summary -->
+  <div class="standings-summary" id="standings-summary">
+    <h3>Predicted Standings <a href="/standings">View full standings &rarr;</a></h3>
+    <div class="summary-leader-cards" id="summary-leaders"></div>
+    <div class="summary-grid" id="summary-divisions"></div>
   </div>
 
   <div class="layout">
@@ -188,6 +218,69 @@ function dateBadge(dateStr) {
   return `<span style="color:var(--muted);font-size:0.78rem">In ${d}d</span>`;
 }
 
+// ── Standings summary ─────────────────────────────────────────────────────
+async function loadStandingsSummary() {
+  try {
+    const data = await api('/api/standings?season=2026');
+    renderSummaryLeaders(data.league_leaders);
+    renderSummaryDivisions(data.divisions);
+  } catch (e) {
+    $('standings-summary').style.display = 'none';
+  }
+}
+
+function renderSummaryLeaders(leaders) {
+  if (!leaders || (!leaders.AL && !leaders.NL)) return;
+  let html = '';
+  ['AL', 'NL'].forEach(league => {
+    const l = leaders[league];
+    if (!l) return;
+    const badgeCls = league === 'AL' ? 'badge-al' : 'badge-nl';
+    html += `<div class="leader-mini">
+      <div class="leader-mini-label"><span class="summary-div-badge ${badgeCls}">${league}</span> Predicted Leader</div>`;
+    if (l.predicted_leader) {
+      const pl = l.predicted_leader;
+      html += `<div class="leader-mini-team">${pl.team_name || pl.retro_code}</div>
+        <div class="leader-mini-record">${pl.pred_wins}-${pl.pred_losses} (${(pl.pred_win_pct * 100).toFixed(1)}%)</div>`;
+    }
+    if (l.actual_leader) {
+      const al = l.actual_leader;
+      html += `<div style="margin-top:0.35rem;font-size:0.78rem;color:var(--muted)">
+        Actual: <strong style="color:var(--text)">${al.team_name || al.retro_code}</strong>
+        ${al.actual_wins}-${al.actual_losses} (${(al.actual_win_pct * 100).toFixed(1)}%)
+      </div>`;
+    }
+    html += '</div>';
+  });
+  $('summary-leaders').innerHTML = html;
+}
+
+function renderSummaryDivisions(divisions) {
+  if (!divisions || !divisions.length) return;
+  let html = '';
+  divisions.forEach(div => {
+    const badgeCls = div.league === 'AL' ? 'badge-al' : 'badge-nl';
+    html += `<div class="summary-div">
+      <div class="summary-div-header">
+        <span class="summary-div-badge ${badgeCls}">${div.league}</span> ${div.division_name}
+      </div>`;
+    div.teams.forEach((t, i) => {
+      const predRec = `${t.pred_wins.toFixed(0)}-${t.pred_losses.toFixed(0)}`;
+      let extra = '';
+      if (t.actual_wins != null) {
+        extra = ` <span style="color:var(--muted);font-size:0.72rem">(act: ${t.actual_wins}-${t.actual_losses})</span>`;
+      }
+      html += `<div class="summary-team-row">
+        <span class="rank">${i + 1}</span>
+        <span class="name">${t.team_name}</span>
+        <span class="record">${predRec}${extra}</span>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  $('summary-divisions').innerHTML = html;
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 async function init() {
   let teams = [];
@@ -207,7 +300,7 @@ async function init() {
     $(id).addEventListener('keydown', e => { if (e.key === 'Enter') loadGames(0); });
   });
 
-  await Promise.all([loadGames(0), loadRankings()]);
+  await Promise.all([loadGames(0), loadRankings(), loadStandingsSummary()]);
 }
 
 // ── Games table ───────────────────────────────────────────────────────────

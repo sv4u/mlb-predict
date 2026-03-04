@@ -60,9 +60,9 @@ Yandex's CatBoost uses ordered boosting and symmetric (oblivious) decision trees
 
 ### Neural Network (MLP)
 
-A multi-layer perceptron classifier with two hidden layers (128, 64 units) and ReLU activations. Captures nonlinear feature interactions that tree models may miss. Features are z-score normalised before training. Provides model diversity for stacking since its error surface is fundamentally different from tree-based learners.
+A multi-layer perceptron classifier with three hidden layers (128, 64, 32 units) and ReLU activations. Captures nonlinear feature interactions that tree models may miss. Features are z-score normalised before training. Provides model diversity for stacking since its error surface is fundamentally different from tree-based learners.
 
-- **Architecture**: 128 → 64 → 1, Adam optimiser
+- **Architecture**: 128 → 64 → 32 → 1, Adam optimiser
 - **Regularisation**: L2 weight decay (alpha)
 - **When to use**: Ensemble diversity; capturing non-tree-like nonlinearities
 
@@ -238,7 +238,9 @@ Open:
 
 - `http://localhost:8087` — all-seasons games browser
 - `http://localhost:8087/season/2026` — 2026 schedule and predictions
+- `http://localhost:8087/standings` — predicted vs actual standings with team stats
 - `http://localhost:8087/dashboard` — admin dashboard (update season, full reingest, retrain, system status)
+- `http://localhost:8087/sitemap` — complete page and API index
 
 ### CLI query tool
 
@@ -646,32 +648,40 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 | URL | Description |
 | --- | --- |
 | `http://localhost:8087/` | All-seasons games browser (2000–2026) |
-| `http://localhost:8087/season/2026` | 2026 schedule, pre-season predictions, and Elo power rankings |
+| `http://localhost:8087/season/2026` | 2026 schedule, pre-season predictions, standings summary, and Elo power rankings |
+| `http://localhost:8087/standings` | Predicted vs actual divisional standings, league leaders, team batting and pitching stats |
 | `http://localhost:8087/game/{game_pk}` | Individual game detail with SHAP feature attribution |
 | `http://localhost:8087/wiki` | Technical wiki: models, data sources, features, training pipeline |
 | `http://localhost:8087/dashboard` | Admin dashboard: update season, full reingest, retrain models, system status |
+| `http://localhost:8087/sitemap` | Complete index of all pages and API endpoints |
+| `http://localhost:8087/sitemap.xml` | XML sitemap for search engine crawlers |
 
 ### Features
 
 - **Games browser** — filter by season, home team, away team, or date; paginated; links to game detail
-- **2026 season page** — full 2,430-game schedule with pre-season win probabilities, countdown, favourite/toss-up badges, and a sticky Elo power rankings sidebar
+- **2026 season page** — full 2,430-game schedule with pre-season win probabilities, countdown, favourite/toss-up badges, a sticky Elo power rankings sidebar, and a standings summary with predicted league leaders and divisional standings
+- **Standings page** — predicted vs actual divisional standings for all 6 divisions, predicted and actual league leaders (AL/NL), and tabbed team batting and pitching statistics fetched live from the MLB Stats API
 - **Game detail** — probability bars, SHAP factor attribution chart, key stats comparison
 - **Biggest upsets** — all-time or by season, filterable by home/away team and minimum favourite probability
 - **CV accuracy chart** — out-of-sample accuracy trend across all 6 model types
 - **Models explained** — collapsible cards describing each model with live Brier/Accuracy from CV data
 - **Technical wiki** — comprehensive documentation of all models, baseball statistics, data sources, feature engineering, training pipeline, calibration, evaluation metrics, prediction snapshots, drift monitoring, error handling, and system architecture
 - **Admin dashboard** — three pipeline controls: "Update Season" (non-destructive current-year refresh), "Full Reingest" (clears all processed data and re-ingests every season from scratch), and "Retrain Models" (clears all model artifacts and retrains from scratch). Destructive actions require confirmation. All pipelines run async with real-time log streaming, status badges, trained model inventory, CV performance table, and data coverage stats. Pipelines auto-reload the server on completion.
+- **Sitemap** — complete index of all pages and API endpoints with descriptions; also available as XML (`/sitemap.xml`) for search engine crawlers
 
 ### API endpoints
 
 | Endpoint                                          | Description                                      |
 | ------------------------------------------------- | ------------------------------------------------ |
+| `GET /api/version`                                | Application version and git commit hash          |
 | `GET /api/seasons`                                | List available seasons                           |
 | `GET /api/teams`                                  | List all teams (Retrosheet codes + names)        |
 | `GET /api/games?season=&home=&away=&date=`        | Paginated game list with predictions             |
 | `GET /api/games/{game_pk}`                        | Full detail + SHAP attribution for one game      |
 | `GET /api/upsets?season=&home=&away=&min_prob=`   | Biggest upsets, filterable by team               |
 | `GET /api/cv-summary`                             | Model CV results by season                       |
+| `GET /api/standings?season=`                      | Predicted vs actual standings by division with league leaders |
+| `GET /api/team-stats?season=`                     | Team batting and pitching statistics from MLB Stats API |
 | `GET /api/admin/status`                           | Full system status (data, models, pipelines)     |
 | `POST /api/admin/ingest`                          | Full re-ingestion: clear all data + re-ingest all seasons (async) |
 | `POST /api/admin/update`                          | Update current season only — non-destructive (async) |
@@ -687,7 +697,9 @@ mlb-winprob/
 │   ├── mlbapi/          # MLB Stats API client (async, rate-limited)
 │   │   ├── client.py
 │   │   ├── schedule.py
-│   │   └── pitcher_stats.py
+│   │   ├── teams.py
+│   │   ├── pitcher_stats.py
+│   │   └── standings.py     # Live standings, team batting/pitching stats
 │   ├── statcast/        # Statcast / FanGraphs advanced metrics
 │   │   ├── fangraphs.py     # FanGraphs team-level stats (via pybaseball)
 │   │   └── player_stats.py  # Statcast individual batter/pitcher stats + ID mapping
@@ -710,6 +722,7 @@ mlb-winprob/
 │   │   └── snapshot.py
 │   ├── drift/           # Drift monitoring
 │   │   └── compute.py
+│   ├── standings.py     # Division mappings, predicted standings, merge logic
 │   ├── errors.py        # Structured error taxonomy (WinProbError hierarchy)
 │   └── app/             # FastAPI web dashboard
 │       ├── main.py          # Routes and API endpoints
@@ -718,9 +731,11 @@ mlb-winprob/
 │       └── templates/
 │           ├── index.html        # All-seasons games browser
 │           ├── game.html         # Individual game detail + SHAP
-│           ├── season_2026.html  # 2026 season schedule + predictions
+│           ├── season_2026.html  # 2026 season schedule + predictions + standings summary
+│           ├── standings.html    # Predicted vs actual standings + team stats
 │           ├── wiki.html         # Technical wiki (models, data, training)
-│           └── dashboard.html    # Admin dashboard (update, reingest, retrain, status)
+│           ├── dashboard.html    # Admin dashboard (update, reingest, retrain, status)
+│           └── sitemap.html      # Complete page and API endpoint index
 ├── scripts/
 │   ├── ingest_schedule.py              # MLB Stats API schedule ingestion
 │   ├── ingest_retrosheet_gamelogs.py   # Retrosheet game log ingestion

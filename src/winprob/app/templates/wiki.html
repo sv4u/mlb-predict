@@ -111,8 +111,10 @@
   <nav style="margin-left:auto;display:flex;gap:0.6rem">
     <a href="/" class="nav-link">All Seasons</a>
     <a href="/season/2026" class="nav-link">2026 Season</a>
+    <a href="/standings" class="nav-link">Standings</a>
     <a href="/wiki" class="nav-link active">Wiki</a>
     <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/sitemap" class="nav-link">Sitemap</a>
   </nav>
 </header>
 
@@ -177,6 +179,13 @@
         <li><a href="#e-accuracy">Accuracy</a></li>
         <li><a href="#e-calibration">Calibration Error</a></li>
         <li><a href="#e-results">Current Results</a></li>
+      </ul>
+    </li>
+    <li><a href="#standings">Standings &amp; Live Data</a>
+      <ul class="sub">
+        <li><a href="#st-predicted">Predicted Standings</a></li>
+        <li><a href="#st-live">Live API Data</a></li>
+        <li><a href="#st-comparison">Comparison Metrics</a></li>
       </ul>
     </li>
     <li><a href="#predictions">Predictions &amp; Drift</a></li>
@@ -290,6 +299,8 @@
 <ul>
   <li><strong>Schedule data:</strong> Every regular season game from 2000–2026 with game IDs, teams, venue, date/time, doubleheader flags</li>
   <li><strong>Pitcher stats:</strong> Season-level ERA, K/9, BB/9, WHIP for every pitcher — used for prior-season starting pitcher quality features</li>
+  <li><strong>Live standings:</strong> Current-season wins, losses, run differential, division/league rank — used for the predicted vs actual comparison on the <a href="/standings">Standings page</a></li>
+  <li><strong>Team statistics:</strong> Aggregate team batting (AVG, OBP, SLG, OPS, R, H, 2B, 3B, HR, RBI, SB, BB, SO) and pitching (ERA, W, L, SV, IP, H, BB, SO, WHIP, HR) stats per season</li>
 </ul>
 
 <h3 id="ds-retrosheet">Retrosheet Game Logs</h3>
@@ -769,6 +780,74 @@ Example (training for 2025 evaluation):
 
 
 <!-- ================================================================== -->
+<h2 id="standings">Standings &amp; Live Data</h2>
+
+<p>
+  The system provides a live comparison between <strong>predicted standings</strong> (computed from
+  the model&rsquo;s per-game win probabilities) and <strong>actual standings</strong> (fetched in
+  real time from the MLB Stats API). This enables continuous evaluation of how well the model&rsquo;s
+  pre-season and in-season predictions align with on-field results.
+</p>
+
+<h3 id="st-predicted">Predicted Standings</h3>
+<p>
+  Predicted standings are computed from the feature cache by summing the model&rsquo;s per-game
+  win probabilities for each team:
+</p>
+<ul>
+  <li><strong>Home games:</strong> expected wins = &Sigma; P(home win) across all home games</li>
+  <li><strong>Away games:</strong> expected wins = &Sigma; (1 &minus; P(home win)) across all away games</li>
+  <li><strong>Win %:</strong> total expected wins &divide; total games</li>
+</ul>
+<p>
+  Teams are grouped into their 6 divisions (AL East, AL Central, AL West, NL East, NL Central,
+  NL West) using an internal mapping of MLB team IDs to divisions. Within each division, teams
+  are ranked by predicted win percentage, and games-back is calculated relative to the division
+  leader. League leaders (highest predicted win % in AL and NL) are also identified.
+</p>
+
+<h3 id="st-live">Live API Data</h3>
+<p>
+  Actual standings are fetched from the MLB Stats API (<code>statsapi.mlb.com/api/v1/standings</code>)
+  whenever the standings page or API endpoint is accessed. The API returns:
+</p>
+<ul>
+  <li><strong>Standings:</strong> wins, losses, winning percentage, games back, division rank, league rank, run differential</li>
+  <li><strong>Team batting:</strong> AVG, OBP, SLG, OPS, R, H, 2B, 3B, HR, RBI, SB, BB, SO</li>
+  <li><strong>Team pitching:</strong> ERA, W, L, SV, IP, H, BB, SO, WHIP, HR</li>
+</ul>
+<p>
+  All API calls go through the rate-limited <code>MLBAPIClient</code>. If the season has not
+  yet started (all teams show 0&ndash;0 records), actual data is suppressed to avoid misleading
+  comparisons.
+</p>
+
+<h3 id="st-comparison">Comparison Metrics</h3>
+<p>
+  When actual data is available, the system merges predicted and actual standings and computes:
+</p>
+<table class="feature-table">
+  <thead><tr><th>Metric</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>wins_delta</code></td><td>Actual wins minus predicted wins &mdash; positive means the team is outperforming the model</td></tr>
+    <tr><td><code>pct_delta</code></td><td>Actual win% minus predicted win%</td></tr>
+    <tr><td><code>rank_delta</code></td><td>Actual division rank minus predicted rank &mdash; negative means the team is higher than predicted</td></tr>
+  </tbody>
+</table>
+<p>
+  League leaders are computed separately for both predicted and actual standings, allowing direct
+  comparison of which teams the model expected to lead each league versus which teams actually do.
+</p>
+
+<div class="info-box">
+  <strong>Where to view:</strong> The <a href="/standings">Standings page</a> shows the full
+  divisional breakdown with predicted vs actual columns, league leaders, and tabbed team batting
+  and pitching statistics. A compact summary also appears on the
+  <a href="/season/2026">2026 Season page</a>.
+</div>
+
+
+<!-- ================================================================== -->
 <h2 id="predictions">Predictions &amp; Drift Monitoring</h2>
 
 <h3>Prediction Snapshots</h3>
@@ -869,9 +948,10 @@ Example (training for 2025 evaluation):
                    ──▶  <span class="hl3">compute_drift()</span>  ──▶  drift metrics
 
 <span class="hl2">Web Dashboard</span>
-FastAPI + Jinja2 templates ──▶ Game browser, 2026 season, SHAP, wiki, admin
+FastAPI + Jinja2 templates ──▶ Game browser, 2026 season, standings, SHAP, wiki, admin, sitemap
 Admin pipeline controls ──▶ Update Season | Full Reingest | Retrain Models
-Real-time API endpoints ──▶ /api/games, /api/upsets, /api/admin/*</div>
+Real-time API endpoints ──▶ /api/games, /api/upsets, /api/standings, /api/team-stats, /api/admin/*
+Live standings data ──▶ MLB Stats API (wins, losses, batting stats, pitching stats)</div>
 
 <p>
   The system is designed for <strong>durability and auditability</strong>. All raw data is

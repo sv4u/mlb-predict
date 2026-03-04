@@ -11,7 +11,7 @@ from typing import Annotated
 
 import pandas as pd
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -29,6 +29,13 @@ from winprob.app.data_cache import (
     get_git_commit,
     get_model,
     startup,
+)
+from winprob.standings import (
+    DIVISION_DISPLAY_ORDER,
+    DIVISIONS,
+    compute_league_leaders,
+    compute_predicted_standings,
+    merge_predicted_actual,
 )
 
 logger = logging.getLogger(__name__)
@@ -283,6 +290,168 @@ def api_cv_summary() -> list[dict]:
     return []
 
 
+@app.get("/api/standings")
+async def api_standings(
+    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
+) -> dict:
+    """Return predicted vs actual standings grouped by division.
+
+    Predicted standings are computed from the per-game win probabilities
+    in the features cache.  Actual standings are fetched live from the
+    MLB Stats API when available.
+    """
+    from winprob.mlbapi.client import MLBAPIClient
+    from winprob.mlbapi.standings import fetch_standings
+
+    df = get_features()
+    pred_df = compute_predicted_standings(df, season=season)
+
+    actual_df = pd.DataFrame()
+    try:
+        async with MLBAPIClient() as client:
+            actual_df = await fetch_standings(client, season=season)
+    except Exception as exc:
+        logger.warning("Could not fetch live standings for season=%d: %s", season, exc)
+
+    # Suppress actual data when season hasn't started (all teams 0-0)
+    season_started = not actual_df.empty and actual_df["wins"].sum() + actual_df["losses"].sum() > 0
+
+    if not pred_df.empty and season_started:
+        standings = merge_predicted_actual(pred_df, actual_df)
+    elif not pred_df.empty:
+        standings = pred_df
+    else:
+        return {"season": season, "divisions": [], "league_leaders": {}}
+
+    league_leaders = compute_league_leaders(standings)
+
+    divisions: list[dict] = []
+    for div_id in DIVISION_DISPLAY_ORDER:
+        div_info = DIVISIONS.get(div_id, {})
+        div_df = standings[standings["division_id"] == div_id].sort_values(
+            "pred_win_pct",
+            ascending=False,
+        )
+        if div_df.empty:
+            continue
+
+        teams: list[dict] = []
+        for _, row in div_df.iterrows():
+            team_entry: dict = {
+                "retro_code": row.get("retro_code", ""),
+                "mlb_id": int(row.get("mlb_id", 0)),
+                "team_name": TEAM_NAMES.get(row.get("retro_code", ""), row.get("team_name", "")),
+                "pred_wins": float(row.get("pred_wins", 0)),
+                "pred_losses": float(row.get("pred_losses", 0)),
+                "pred_win_pct": float(row.get("pred_win_pct", 0)),
+                "pred_division_rank": int(row.get("pred_division_rank", 0)),
+                "pred_gb": str(row.get("pred_gb_str", "-")),
+                "pred_total_games": int(row.get("pred_total_games", 0)),
+            }
+            if "actual_wins" in row and pd.notna(row.get("actual_wins")):
+                team_entry.update(
+                    {
+                        "actual_wins": int(row["actual_wins"]),
+                        "actual_losses": int(row["actual_losses"]),
+                        "actual_win_pct": round(float(row["actual_win_pct"]), 3),
+                        "actual_gb": str(row.get("actual_gb", "-")),
+                        "actual_division_rank": int(row.get("actual_division_rank", 0)),
+                        "runs_scored": int(row.get("runs_scored", 0)),
+                        "runs_allowed": int(row.get("runs_allowed", 0)),
+                        "run_diff": int(row.get("run_diff", 0)),
+                        "wins_delta": round(float(row.get("wins_delta", 0)), 1),
+                        "pct_delta": round(float(row.get("pct_delta", 0)), 3),
+                        "rank_delta": int(row.get("rank_delta", 0)),
+                    }
+                )
+            teams.append(team_entry)
+
+        divisions.append(
+            {
+                "division_id": div_id,
+                "division_name": div_info.get("name", ""),
+                "league": div_info.get("league", ""),
+                "teams": teams,
+            }
+        )
+
+    return {
+        "season": season,
+        "divisions": divisions,
+        "league_leaders": league_leaders,
+    }
+
+
+@app.get("/api/team-stats")
+async def api_team_stats(
+    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
+) -> dict:
+    """Return batting and pitching stats for all teams in a season."""
+    from winprob.mlbapi.client import MLBAPIClient
+    from winprob.mlbapi.standings import fetch_all_team_stats, fetch_standings
+
+    try:
+        async with MLBAPIClient() as client:
+            standings = await fetch_standings(client, season=season)
+            if standings.empty:
+                return {"season": season, "teams": []}
+            # Don't fetch individual team stats if season hasn't started
+            total_games = standings["wins"].sum() + standings["losses"].sum()
+            if total_games == 0:
+                return {"season": season, "teams": [], "message": "Season has not started yet."}
+            full = await fetch_all_team_stats(
+                client,
+                standings_df=standings,
+                season=season,
+            )
+    except Exception as exc:
+        logger.warning("Could not fetch team stats for season=%d: %s", season, exc)
+        return {"season": season, "teams": [], "error": str(exc)}
+
+    teams: list[dict] = []
+    for _, row in full.iterrows():
+        teams.append(
+            {
+                "team_id": int(row.get("team_id", 0)),
+                "team_name": row.get("team_name", ""),
+                "division_name": row.get("division_name", ""),
+                "league_name": row.get("league_name", ""),
+                "record": f"{row.get('wins', 0)}-{row.get('losses', 0)}",
+                "pct": round(float(row.get("pct", 0)), 3),
+                "run_diff": int(row.get("run_diff", 0)),
+                "batting": {
+                    "avg": round(float(row.get("bat_avg", 0)), 3),
+                    "obp": round(float(row.get("bat_obp", 0)), 3),
+                    "slg": round(float(row.get("bat_slg", 0)), 3),
+                    "ops": round(float(row.get("bat_ops", 0)), 3),
+                    "runs": int(row.get("bat_runs", 0)),
+                    "hits": int(row.get("bat_hits", 0)),
+                    "doubles": int(row.get("bat_doubles", 0)),
+                    "triples": int(row.get("bat_triples", 0)),
+                    "hr": int(row.get("bat_hr", 0)),
+                    "rbi": int(row.get("bat_rbi", 0)),
+                    "sb": int(row.get("bat_sb", 0)),
+                    "bb": int(row.get("bat_bb", 0)),
+                    "so": int(row.get("bat_so", 0)),
+                },
+                "pitching": {
+                    "era": round(float(row.get("pit_era", 0)), 2),
+                    "wins": int(row.get("pit_wins", 0)),
+                    "losses": int(row.get("pit_losses", 0)),
+                    "saves": int(row.get("pit_saves", 0)),
+                    "ip": str(row.get("pit_ip", "")),
+                    "hits": int(row.get("pit_hits", 0)),
+                    "bb": int(row.get("pit_bb", 0)),
+                    "so": int(row.get("pit_so", 0)),
+                    "whip": round(float(row.get("pit_whip", 0)), 2),
+                    "hr": int(row.get("pit_hr", 0)),
+                },
+            }
+        )
+
+    return {"season": season, "teams": teams}
+
+
 # ---------------------------------------------------------------------------
 # HTML pages
 # ---------------------------------------------------------------------------
@@ -314,6 +483,33 @@ async def page_season_2026(request: Request):
         "season_2026.html",
         _ctx(request, total_games=total, first_date=first_date),
     )
+
+
+@app.get("/standings", response_class=HTMLResponse)
+async def page_standings(request: Request):
+    """Full standings page: predicted vs actual, all divisions + league leaders."""
+    return templates.TemplateResponse("standings.html", _ctx(request))
+
+
+@app.get("/sitemap", response_class=HTMLResponse)
+async def page_sitemap(request: Request):
+    """Sitemap page listing all routes in the application."""
+    return templates.TemplateResponse("sitemap.html", _ctx(request))
+
+
+@app.get("/sitemap.xml", response_class=Response)
+async def xml_sitemap(request: Request) -> Response:
+    """XML sitemap for search engine crawlers."""
+    base = str(request.base_url).rstrip("/")
+    paths = ["/", "/season/2026", "/standings", "/wiki", "/dashboard", "/sitemap"]
+    urls = "\n".join(f"  <url><loc>{base}{p}</loc></url>" for p in paths)
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{urls}\n"
+        "</urlset>\n"
+    )
+    return Response(content=xml, media_type="application/xml")
 
 
 @app.get("/wiki", response_class=HTMLResponse)
