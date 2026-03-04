@@ -114,6 +114,7 @@ def _clean_processed_data(state: PipelineState) -> None:
         "drift",
         "vegas",
         "statcast_player",
+        "weather",
     }
     if not _PROCESSED_DIR.exists():
         state.append_log("  No processed data directory — nothing to clean.")

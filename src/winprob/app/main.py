@@ -31,8 +31,10 @@ from winprob.app.data_cache import (
     get_features,
     get_git_commit,
     get_model,
+    is_ready,
     startup,
     switch_model,
+    try_startup,
 )
 from winprob.app.timing import TimingMiddleware, timed_operation
 from winprob.standings import (
@@ -77,17 +79,47 @@ def _reload_app() -> None:
     startup(model_type)
 
 
+async def _auto_bootstrap() -> None:
+    """Auto-trigger ingest + retrain when no data/model exists on first startup."""
+    logger.info("No data/model found — auto-bootstrapping with ingest + retrain")
+
+    def _reload_after_retrain() -> None:
+        model_type = os.environ.get("WINPROB_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
+        try:
+            startup(model_type)
+            logger.info("Auto-bootstrap complete — app is ready")
+        except RuntimeError as exc:
+            logger.error("Auto-bootstrap reload failed: %s", exc)
+
+    await run_pipeline(PipelineKind.INGEST)
+    ingest_state = get_state(PipelineKind.INGEST)
+    if ingest_state.status.value != "success":
+        logger.error("Auto-bootstrap ingest failed — retrain skipped")
+        return
+    await run_pipeline(PipelineKind.RETRAIN, on_success=_reload_after_retrain)
+
+
 @app.on_event("startup")
 async def _startup() -> None:
     model_type = os.environ.get("WINPROB_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
     logger.info("Application startup: model_type=%s", model_type)
-    startup(model_type)
-    logger.info("Startup complete — serving on model '%s'", model_type)
+    loaded = try_startup(model_type)
+    if loaded:
+        logger.info("Startup complete — serving on model '%s'", model_type)
+    else:
+        logger.info("Data not ready — server accepting requests; auto-bootstrap starting")
+        asyncio.create_task(_auto_bootstrap())
 
 
 # ---------------------------------------------------------------------------
 # API endpoints
 # ---------------------------------------------------------------------------
+
+
+@app.get("/api/health")
+def api_health() -> dict:
+    """Lightweight health/readiness probe."""
+    return {"ready": is_ready(), "version": "3.0"}
 
 
 @app.get("/api/version")
@@ -99,9 +131,19 @@ def api_version() -> dict:
     }
 
 
+def _not_ready_json() -> JSONResponse:
+    """Return a 503 JSON response when the app isn't ready yet."""
+    return JSONResponse(
+        {"error": "System initializing — data not loaded yet.", "status": "initializing"},
+        status_code=503,
+    )
+
+
 @app.get("/api/seasons", response_model=None)
 def api_seasons() -> list[int] | JSONResponse:
     """List all available seasons."""
+    if not is_ready():
+        return _not_ready_json()
     try:
         df = get_features()
         return sorted(df["season"].dropna().unique().astype(int).tolist())
@@ -109,9 +151,11 @@ def api_seasons() -> list[int] | JSONResponse:
         return JSONResponse({"error": str(exc)}, status_code=503)
 
 
-@app.get("/api/teams")
-def api_teams() -> list[dict]:
+@app.get("/api/teams", response_model=None)
+def api_teams() -> list[dict] | JSONResponse:
     """List all known teams with their Retrosheet codes and names."""
+    if not is_ready():
+        return _not_ready_json()
     df = get_features()
     teams = set(df["home_retro"].dropna().tolist()) | set(df["away_retro"].dropna().tolist())
     return sorted(
@@ -120,7 +164,7 @@ def api_teams() -> list[dict]:
     )
 
 
-@app.get("/api/games")
+@app.get("/api/games", response_model=None)
 def api_games(
     season: Annotated[int | None, Query()] = None,
     home: Annotated[str | None, Query()] = None,
@@ -130,8 +174,10 @@ def api_games(
     offset: Annotated[int, Query(ge=0)] = 0,
     sort: Annotated[str, Query()] = "date",
     order: Annotated[str, Query()] = "desc",
-) -> dict:
+) -> dict | JSONResponse:
     """Query games with optional filters."""
+    if not is_ready():
+        return _not_ready_json()
     logger.debug(
         "GET /api/games season=%s home=%s away=%s date=%s limit=%d offset=%d",
         season,
@@ -188,6 +234,8 @@ def api_games(
 @app.get("/api/games/{game_pk}", response_model=None)
 def api_game_detail(game_pk: int) -> dict | JSONResponse:
     """Full feature breakdown + SHAP attribution for a single game."""
+    if not is_ready():
+        return _not_ready_json()
     logger.debug("GET /api/games/%d", game_pk)
     df = get_features()
     matches = df[df["game_pk"] == game_pk]
@@ -249,15 +297,17 @@ def api_game_detail(game_pk: int) -> dict | JSONResponse:
     }
 
 
-@app.get("/api/upsets")
+@app.get("/api/upsets", response_model=None)
 def api_upsets(
     season: Annotated[int | None, Query()] = None,
     home: Annotated[str | None, Query()] = None,
     away: Annotated[str | None, Query()] = None,
     min_prob: Annotated[float, Query(ge=0.5, le=1.0)] = 0.65,
     limit: Annotated[int, Query(ge=1, le=200)] = 20,
-) -> list[dict]:
+) -> list[dict] | JSONResponse:
     """Return the biggest upsets (heavy favorites that lost)."""
+    if not is_ready():
+        return _not_ready_json()
     with timed_operation("upsets_query"):
         df = get_features()
         if season:
@@ -311,16 +361,18 @@ def api_cv_summary() -> list[dict]:
     return []
 
 
-@app.get("/api/standings")
+@app.get("/api/standings", response_model=None)
 async def api_standings(
     season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
-) -> dict:
+) -> dict | JSONResponse:
     """Return predicted vs actual standings grouped by division.
 
     Predicted standings are computed from the per-game win probabilities
     in the features cache.  Actual standings are fetched live from the
     MLB Stats API when available.
     """
+    if not is_ready():
+        return _not_ready_json()
     logger.debug("GET /api/standings season=%d", season)
     from winprob.mlbapi.client import MLBAPIClient
     from winprob.mlbapi.standings import fetch_standings
@@ -491,19 +543,33 @@ def _ctx(request: Request, **extra: object) -> dict:
     }
 
 
+def _init_page(request: Request) -> HTMLResponse:
+    """Return the initialization progress page."""
+    return templates.TemplateResponse(
+        "initializing.html",
+        {"request": request, "git_commit": get_git_commit()},
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 async def page_home(request: Request):
+    if not is_ready():
+        return _init_page(request)
     return templates.TemplateResponse("index.html", _ctx(request))
 
 
 @app.get("/game/{game_pk}", response_class=HTMLResponse)
 async def page_game(request: Request, game_pk: int):
+    if not is_ready():
+        return _init_page(request)
     return templates.TemplateResponse("game.html", _ctx(request, game_pk=game_pk))
 
 
 @app.get("/season/2026", response_class=HTMLResponse)
 async def page_season_2026(request: Request):
     """Dedicated 2026 season schedule + pre-season predictions page."""
+    if not is_ready():
+        return _init_page(request)
     df = get_features()
     season_df = df[df["season"] == 2026]
     total = len(season_df)
@@ -517,6 +583,8 @@ async def page_season_2026(request: Request):
 @app.get("/standings", response_class=HTMLResponse)
 async def page_standings(request: Request):
     """Full standings page: predicted vs actual, all divisions + league leaders."""
+    if not is_ready():
+        return _init_page(request)
     return templates.TemplateResponse("standings.html", _ctx(request))
 
 
@@ -544,6 +612,8 @@ async def xml_sitemap(request: Request) -> Response:
 @app.get("/wiki", response_class=HTMLResponse)
 async def page_wiki(request: Request):
     """Technical wiki describing models, data sources, and training pipeline."""
+    if not is_ready():
+        return _init_page(request)
     return templates.TemplateResponse("wiki.html", _ctx(request))
 
 

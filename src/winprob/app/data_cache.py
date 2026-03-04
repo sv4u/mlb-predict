@@ -30,6 +30,7 @@ _meta: object | None = None
 _feature_cols: list[str] = []
 _git_commit: str = "unknown"
 _active_model_type: str = "stacked"
+_app_ready: bool = False
 
 
 def _resolve_git_commit() -> str:
@@ -166,9 +167,14 @@ def switch_model(model_type: str) -> None:
     )
 
 
+def is_ready() -> bool:
+    """Return True if data and model are loaded and the app can serve requests."""
+    return _app_ready
+
+
 def startup(model_type: str = "logistic") -> None:
     """Load features and model into memory.  Called once at application startup."""
-    global _features, _model, _meta, _feature_cols, _git_commit, _active_model_type
+    global _features, _model, _meta, _feature_cols, _git_commit, _active_model_type, _app_ready
 
     t0 = time.monotonic()
     _git_commit = _resolve_git_commit()
@@ -183,8 +189,6 @@ def startup(model_type: str = "logistic") -> None:
         if not frames:
             raise RuntimeError("No feature files found.  Run build_features.py first.")
         _features = pd.concat(frames, ignore_index=True)
-        # Normalize date column to datetime.date across all seasons (guards against
-        # features_2026.parquet having string dates from a previous run).
         _features["date"] = pd.to_datetime(_features["date"], errors="coerce").dt.date
 
         from winprob.model.artifacts import latest_artifact, load_model
@@ -210,6 +214,7 @@ def startup(model_type: str = "logistic") -> None:
             missing = [c for c in _feature_cols if c not in _features.columns]
             logger.warning("Feature columns missing from data: %s", missing)
 
+        _app_ready = True
         elapsed_ms = (time.monotonic() - t0) * 1000
         logger.info(
             "Loaded %d games (%.0f with probabilities), model=%s in %.0fms",
@@ -218,6 +223,18 @@ def startup(model_type: str = "logistic") -> None:
             model_type,
             elapsed_ms,
         )
+
+
+def try_startup(model_type: str = "logistic") -> bool:
+    """Attempt startup; return True if data loaded, False if data/model missing."""
+    global _git_commit
+    _git_commit = _resolve_git_commit()
+    try:
+        startup(model_type)
+        return True
+    except RuntimeError as exc:
+        logger.warning("Startup deferred — data not ready: %s", exc)
+        return False
 
 
 def get_features() -> pd.DataFrame:

@@ -30,7 +30,7 @@ _request_timings: ContextVar[list[dict[str, object]]] = ContextVar(
 class TimingMiddleware(BaseHTTPMiddleware):
     """Measure wall-clock request duration and emit an ``X-Process-Time-Ms`` header."""
 
-    async def dispatch(self, request: Request, call_next: object) -> Response:  # type: ignore[override]
+    async def dispatch(self, request: Request, call_next: object) -> Response:
         """Wrap the downstream handler with timing instrumentation."""
         token = _request_timings.set([])
         t0 = time.monotonic()
@@ -99,18 +99,16 @@ class timed_operation:
         self._t0 = time.monotonic()
         return self
 
-    def __exit__(self, *exc: object) -> bool:
+    def __exit__(self, *exc: object) -> None:
         self._record()
-        return False
 
     # Async context manager
     async def __aenter__(self) -> timed_operation:
         self._t0 = time.monotonic()
         return self
 
-    async def __aexit__(self, *exc: object) -> bool:
+    async def __aexit__(self, *exc: object) -> None:
         self._record()
-        return False
 
 
 def get_request_timings() -> list[dict[str, object]]:

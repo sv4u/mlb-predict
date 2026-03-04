@@ -69,7 +69,7 @@ _NEUTRAL_TEMP_F: float = 72.0
 _NEUTRAL_WIND_MPH: float = 8.0
 _NEUTRAL_HUMIDITY: float = 0.50
 
-_REQUEST_DELAY_S: float = 0.5
+_REQUEST_DELAY_S: float = 2.0
 _MAX_RETRIES: int = 5
 _BACKOFF_BASE_S: float = 2.0
 _BACKOFF_MAX_S: float = 120.0

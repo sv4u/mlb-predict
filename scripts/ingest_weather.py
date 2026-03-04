@@ -7,11 +7,16 @@ season), and writes data/processed/weather/by_park_date.parquet.
 Batch strategy reduces ~140 000 individual API calls to ~780 for a full
 26-season reingest, staying well within Open-Meteo free-tier limits
 (10 000 calls/day, 5 000/hour, 600/minute).
+
+Progress reporting:
+  - Season-level summaries printed to stdout (visible in admin dashboard logs).
+  - Per-park detail logged at INFO level for troubleshooting.
 """
 
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -23,6 +28,8 @@ from winprob.external.weather import (
     _NEUTRAL_WIND_MPH,
     fetch_park_season,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -88,31 +95,56 @@ def main() -> None:
 
     rows: list[dict[str, object]] = []
     completed = 0
-    for (park_id, season), dates in sorted(park_season_dates.items()):
-        completed += 1
-        print(f"  [{completed}/{total_api_calls}] {park_id} {season} ({len(dates)} dates)…", end="")
 
-        results = fetch_park_season(park_id, season, dates)
-        fetched = 0
-        for game_date in sorted(dates):
-            w = results.get(game_date)
-            if w is None:
-                w = {
-                    "temp_f": _NEUTRAL_TEMP_F,
-                    "wind_mph": _NEUTRAL_WIND_MPH,
-                    "humidity": _NEUTRAL_HUMIDITY,
-                }
-            rows.append(
-                {
-                    "game_date": game_date,
-                    "park_id": park_id,
-                    "temp_f": w["temp_f"],
-                    "wind_mph": w["wind_mph"],
-                    "humidity": w["humidity"],
-                }
+    seasons_in_order = sorted({s for (_, s) in park_season_dates})
+    for season in seasons_in_order:
+        season_parks = sorted(
+            [(pk, dt) for (pk, s), dt in park_season_dates.items() if s == season]
+        )
+        season_dates_total = sum(len(dt) for _, dt in season_parks)
+        season_api_from = 0
+        season_ok = 0
+        season_neutral = 0
+
+        for park_id, dates in season_parks:
+            completed += 1
+            logger.info(
+                "[%d/%d] %s %d (%d dates)",
+                completed,
+                total_api_calls,
+                park_id,
+                season,
+                len(dates),
             )
-            fetched += 1
-        print(f" {fetched} dates OK ({len(results)} from API)")
+
+            results = fetch_park_season(park_id, season, dates)
+            season_api_from += len(results)
+            for game_date in sorted(dates):
+                w = results.get(game_date)
+                if w is None:
+                    w = {
+                        "temp_f": _NEUTRAL_TEMP_F,
+                        "wind_mph": _NEUTRAL_WIND_MPH,
+                        "humidity": _NEUTRAL_HUMIDITY,
+                    }
+                    season_neutral += 1
+                else:
+                    season_ok += 1
+                rows.append(
+                    {
+                        "game_date": game_date,
+                        "park_id": park_id,
+                        "temp_f": w["temp_f"],
+                        "wind_mph": w["wind_mph"],
+                        "humidity": w["humidity"],
+                    }
+                )
+
+        print(
+            f"  Season {season}: {len(season_parks)} parks, "
+            f"{season_dates_total} dates "
+            f"({season_api_from} from API, {season_neutral} neutral defaults)"
+        )
 
     if rows:
         new_df = pd.DataFrame(rows)
