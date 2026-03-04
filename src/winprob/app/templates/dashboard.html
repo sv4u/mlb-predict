@@ -4,116 +4,61 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dashboard — MLB Win Probability</title>
+  <link rel="stylesheet" href="/static/base.css" />
   <style>
-    :root {
-      --bg: #0f1117; --surface: #1a1d27; --card: #22263a;
-      --border: #2e3350; --accent: #4f8ef7; --accent2: #e74c8e;
-      --text: #e8ecf4; --muted: #8b90a8; --green: #2ecc71; --red: #e74c3c;
-      --yellow: #f1c40f; --orange: #f39c12;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
-    header h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
-    header span { color: var(--muted); font-size: 0.85rem; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
-
-    .nav-link {
-      font-size: 0.82rem; color: var(--muted); text-decoration: none;
-      padding: 0.3rem 0.75rem; border: 1px solid var(--border); border-radius: 6px;
-    }
-    .nav-link.active { color: var(--text); border-color: var(--accent); }
-    .nav-link:hover { text-decoration: none; color: var(--text); }
-
-    .section-title { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.75rem; margin-top: 1.5rem; }
-    .section-title:first-child { margin-top: 0; }
-
-    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
-    .stat-card .label { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.35rem; }
-    .stat-card .value { font-size: 1.5rem; font-weight: 700; }
-    .stat-card .sub { font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; }
-
     .pipeline-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-bottom: 1.5rem; }
     @media (max-width: 1024px) { .pipeline-row { grid-template-columns: 1fr; } }
-
-    .pipeline-card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-      padding: 1.25rem; position: relative; overflow: hidden;
-    }
-    .pipeline-card::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    }
+    .pipeline-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; position: relative; overflow: hidden; }
+    .pipeline-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
     .pipeline-card.ingest::before { background: var(--orange); }
     .pipeline-card.update::before { background: var(--accent); }
     .pipeline-card.retrain::before { background: var(--accent2); }
     .pipeline-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; }
     .pipeline-card .desc { font-size: 0.82rem; color: var(--muted); margin-bottom: 1rem; line-height: 1.5; }
-
-    .status-badge {
-      display: inline-block; padding: 0.15rem 0.55rem; border-radius: 4px;
-      font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-    }
-    .status-idle { background: rgba(139,144,168,.15); color: var(--muted); }
-    .status-running { background: rgba(79,142,247,.2); color: var(--accent); animation: pulse 1.5s infinite; }
-    .status-success { background: rgba(46,204,113,.15); color: var(--green); }
-    .status-failed { background: rgba(231,76,60,.15); color: var(--red); }
-
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-
     .pipeline-meta { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.75rem; }
     .pipeline-meta span { display: block; margin-bottom: 0.2rem; }
-
-    .btn {
-      border: none; border-radius: 6px; color: white; padding: 0.55rem 1.5rem;
-      font-size: 0.88rem; cursor: pointer; font-weight: 600; transition: opacity 0.15s;
-    }
-    .btn:hover { opacity: 0.85; }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn-ingest { background: var(--orange); }
     .btn-update { background: var(--accent); }
     .btn-retrain { background: var(--accent2); }
-
-    .log-box {
-      background: #0a0c12; border: 1px solid var(--border); border-radius: 8px;
-      padding: 0.75rem 1rem; margin-top: 0.75rem; max-height: 260px;
-      overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 0.72rem; line-height: 1.6; color: var(--muted); white-space: pre-wrap;
-      word-break: break-all;
-    }
+    .log-box { background: #0a0c12; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.75rem; max-height: 260px; overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.72rem; line-height: 1.6; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
     .log-box:empty::after { content: 'No log output yet.'; font-style: italic; }
-
     .model-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-    .model-item {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-      padding: 1rem 1.15rem; position: relative; overflow: hidden;
-    }
+    .model-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.15rem; position: relative; overflow: hidden; }
     .model-item::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--accent); }
     .model-item h4 { font-size: 0.88rem; font-weight: 700; margin-bottom: 0.3rem; }
     .model-item .model-detail { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
-
-    .cv-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
-    th { background: var(--card); color: var(--muted); font-weight: 600; padding: 0.55rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
-    tr:hover td { background: var(--card); }
-    .val-good { color: var(--green); font-weight: 600; }
+    .cv-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .model-switch-section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; }
+    .model-switch-section h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem; }
+    .model-switch-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .model-switch-row select { background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 0.5rem 0.75rem; font-size: 0.9rem; }
+    .model-switch-status { font-size: 0.82rem; color: var(--muted); }
   </style>
 </head>
 <body>
-<header>
-  <h1>⚾ MLB Win Probability</h1>
-  <span>Admin Dashboard • <code
-      style="font-size:0.72rem;background:var(--card);padding:0.15rem 0.4rem;border-radius:4px;color:var(--accent)">{{ git_commit }}</code></span>
-  <nav style="margin-left:auto;display:flex;gap:0.6rem">
-    <a href="/" class="nav-link">All Seasons</a>
-    <a href="/season/2026" class="nav-link">2026 Season</a>
-    <a href="/standings" class="nav-link">Standings</a>
-    <a href="/wiki" class="nav-link">Wiki</a>
-    <a href="/dashboard" class="nav-link active">Dashboard</a>
-    <a href="/sitemap" class="nav-link">Sitemap</a>
+<header class="site-header">
+  <a href="/" class="logo">⚾ MLB Win Probability</a>
+  <span class="meta">Admin Dashboard • <code class="git-hash">{{ git_commit }}</code></span>
+  <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+  <nav class="site-nav">
+    <a href="/">All Seasons</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/wiki">Wiki</a>
+    <a href="/dashboard" class="active">Dashboard</a>
+    <a href="/sitemap">Sitemap</a>
+    <div class="model-selector">
+      <span>Model:</span>
+      <select id="model-select">
+        <option value="logistic">Logistic</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">MLP</option>
+        <option value="stacked">Stacked</option>
+      </select>
+      <span id="model-switching" class="switching" style="display:none">switching…</span>
+    </div>
   </nav>
 </header>
 
@@ -205,6 +150,27 @@
     </div>
   </div>
 
+  <h2 class="section-title">Active Model</h2>
+  <div class="model-switch-section">
+    <h3>Runtime Model Selection</h3>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem;line-height:1.5">
+      Switch the active prediction model without restarting the server. All game probabilities
+      will be re-scored using the selected model's trained artifacts.
+    </p>
+    <div class="model-switch-row">
+      <select id="dashboard-model-select">
+        <option value="logistic">Logistic Regression</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">Neural Network (MLP)</option>
+        <option value="stacked">Stacked Ensemble</option>
+      </select>
+      <button class="btn btn-update" id="btn-switch-model" onclick="switchDashboardModel()">Switch Model</button>
+      <span class="model-switch-status" id="switch-status"></span>
+    </div>
+  </div>
+
   <h2 class="section-title">Trained Models</h2>
   <div class="model-grid" id="model-grid"></div>
 
@@ -213,12 +179,12 @@
     <table id="cv-table">
       <thead>
         <tr>
-          <th>Season</th>
-          <th>Model</th>
-          <th>Brier</th>
-          <th>Accuracy</th>
-          <th>Cal Error</th>
-          <th>Games</th>
+          <th data-sort="number">Season</th>
+          <th data-sort="string">Model</th>
+          <th data-sort="number">Brier</th>
+          <th data-sort="percent">Accuracy</th>
+          <th data-sort="number">Cal Error</th>
+          <th data-sort="number">Games</th>
         </tr>
       </thead>
       <tbody id="cv-tbody"></tbody>
@@ -227,6 +193,7 @@
 
 </div>
 
+<script src="/static/base.js"></script>
 <script>
 let pollTimer = null;
 
@@ -383,7 +350,51 @@ async function startPipeline(kind) {
     startPipeline(kind);
   }
 
+  function initDashboardModel() {
+    fetch('/api/active-model').then(r => r.json())
+      .then(data => {
+        const sel = document.getElementById('dashboard-model-select');
+        if (data.model_type) sel.value = data.model_type;
+        const status = document.getElementById('switch-status');
+        status.textContent = 'Active: ' + data.model_type;
+      }).catch(() => { });
+  }
+
+  function switchDashboardModel() {
+    const sel = document.getElementById('dashboard-model-select');
+    const btn = document.getElementById('btn-switch-model');
+    const status = document.getElementById('switch-status');
+    btn.disabled = true;
+    status.textContent = 'Switching…';
+    status.style.color = 'var(--gold)';
+
+    fetch('/api/admin/switch-model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model_type: sel.value })
+    })
+      .then(r => r.json())
+      .then(data => {
+        btn.disabled = false;
+        if (data.ok) {
+          status.textContent = 'Active: ' + data.model_type;
+          status.style.color = 'var(--green)';
+          const navSel = document.getElementById('model-select');
+          if (navSel) navSel.value = data.model_type;
+        } else {
+          status.textContent = 'Error: ' + data.message;
+          status.style.color = 'var(--red)';
+        }
+      })
+      .catch(err => {
+        btn.disabled = false;
+        status.textContent = 'Error: ' + err.message;
+        status.style.color = 'var(--red)';
+      });
+  }
+
 fetchStatus();
+  initDashboardModel();
 </script>
 </body>
 </html>

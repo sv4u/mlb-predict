@@ -4,19 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Game Detail — MLB Win Probability</title>
+  <link rel="stylesheet" href="/static/base.css" />
   <style>
-    :root {
-      --bg:#0f1117;--surface:#1a1d27;--card:#22263a;--border:#2e3350;
-      --accent:#4f8ef7;--text:#e8ecf4;--muted:#8b90a8;--green:#2ecc71;--red:#e74c3c;
-    }
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
-    header{background:var(--surface);border-bottom:1px solid var(--border);padding:1rem 2rem;display:flex;align-items:center;gap:1rem}
-    header h1{font-size:1.25rem;font-weight:700;color:var(--accent)}
-    a{color:var(--accent);text-decoration:none}
-    a:hover{text-decoration:underline}
-    .container{max-width:960px;margin:0 auto;padding:1.5rem}
-    .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem;margin-bottom:1.5rem}
     h2{font-size:1.1rem;margin-bottom:1rem;color:var(--muted)}
     .matchup{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem}
     .team-block{text-align:center;flex:1}
@@ -35,34 +24,45 @@
     .shap-bar{position:absolute;top:0;height:12px;border-radius:2px;transition:width .3s}
     .shap-val{width:55px;font-size:.82rem;text-align:right}
     .result-badge{display:inline-block;padding:.3rem .8rem;border-radius:6px;font-weight:700;font-size:.95rem}
-    .badge-home{background:rgba(46,204,113,.15);color:var(--green)}
-    .badge-away{background:rgba(231,76,60,.15);color:var(--red)}
-    table{width:100%;border-collapse:collapse;font-size:.85rem}
-    th{background:var(--card);color:var(--muted);padding:.5rem .75rem;text-align:left;border-bottom:1px solid var(--border)}
-    td{padding:.5rem .75rem;border-bottom:1px solid var(--border)}
-    tr:hover td{background:var(--card)}
     .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
-    @media(max-width:640px){.grid-2{grid-template-columns:1fr}}
+    @media(max-width:640px){
+      .grid-2{grid-template-columns:1fr}
+      .prob-big{font-size:1.8rem}
+      .team-name{font-size:1.1rem}
+      .shap-label{width:140px;font-size:.75rem}
+      .shap-val{width:45px;font-size:.75rem}
+    }
   </style>
 </head>
 <body>
-<header>
-  <h1><a href="/" style="color:var(--accent);text-decoration:none">⚾ MLB Win Probability</a></h1>
-  <span id="header-sub" style="color:var(--muted);font-size:.85rem">Loading…</span>
-  <code
-    style="font-size:0.72rem;background:var(--card);padding:0.15rem 0.4rem;border-radius:4px;color:var(--accent)">{{ git_commit }}</code>
-  <nav style="margin-left:auto;display:flex;gap:0.6rem">
-    <a href="/" style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">All Seasons</a>
-    <a href="/season/2026" style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">2026 Season</a>
-    <a href="/standings" style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">Standings</a>
-    <a href="/wiki"
-      style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">Wiki</a>
-    <a href="/dashboard" style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">Dashboard</a>
-    <a href="/sitemap" style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">Sitemap</a>
+<header class="site-header">
+  <a href="/" class="logo">⚾ MLB Win Probability</a>
+  <span id="header-sub" class="meta">Loading…</span>
+  <code class="git-hash">{{ git_commit }}</code>
+  <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+  <nav class="site-nav">
+    <a href="/">All Seasons</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/wiki">Wiki</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/sitemap">Sitemap</a>
+    <div class="model-selector">
+      <span>Model:</span>
+      <select id="model-select">
+        <option value="logistic">Logistic</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">MLP</option>
+        <option value="stacked">Stacked</option>
+      </select>
+      <span id="model-switching" class="switching" style="display:none">switching…</span>
+    </div>
   </nav>
 </header>
 
-<div class="container">
+<div class="container-narrow">
 
   <!-- Matchup overview -->
   <div class="card" id="matchup-card">
@@ -101,15 +101,24 @@
     <!-- Key stats -->
     <div class="card">
       <h2>Key Statistics</h2>
-      <table>
-        <thead><tr><th>Metric</th><th>Home</th><th>Away</th></tr></thead>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-sort="string">Metric</th>
+              <th data-sort="number">Home</th>
+              <th data-sort="number">Away</th>
+            </tr>
+          </thead>
         <tbody id="stats-table"></tbody>
       </table>
+      </div>
     </div>
   </div>
 
 </div>
 
+<script src="/static/base.js"></script>
 <script>
 const gamePk = {{ game_pk }};
 
@@ -229,6 +238,7 @@ async function load() {
     const aStyle = !better_h ? 'color:var(--green);font-weight:600' : '';
     return `<tr><td>${label}</td><td style="${hStyle}">${fmt(hv,f,hk)}</td><td style="${aStyle}">${fmt(av,f,ak)}</td></tr>`;
   }).join('');
+  initAllSortables();
 }
 
 load();

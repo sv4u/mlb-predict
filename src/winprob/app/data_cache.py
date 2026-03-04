@@ -2,7 +2,7 @@
 
 Loads all feature data and the production model once at startup.
 Uses a threading lock to prevent concurrent-request corruption during
-hot reloads.
+hot reloads.  Supports runtime model switching via ``switch_model()``.
 """
 
 from __future__ import annotations
@@ -17,20 +17,18 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# Resolve paths relative to this file so the app works regardless of CWD.
-# Layout: src/winprob/app/data_cache.py → repo root is four levels up.
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _PROCESSED_DIR = _REPO_ROOT / "data" / "processed"
 _MODEL_DIR = _REPO_ROOT / "data" / "models"
 
 _lock = threading.Lock()
 
-# Populated at startup
 _features: pd.DataFrame | None = None
 _model: object | None = None
 _meta: object | None = None
 _feature_cols: list[str] = []
 _git_commit: str = "unknown"
+_active_model_type: str = "stacked"
 
 
 def _resolve_git_commit() -> str:
@@ -98,11 +96,78 @@ TEAM_NAMES: dict[str, str] = {
 TEAM_ABBREVS: dict[str, str] = {v: k for k, v in TEAM_NAMES.items()}  # name → retro code
 
 
+def get_active_model_type() -> str:
+    """Return the model type currently loaded in memory."""
+    return _active_model_type
+
+
+def available_model_types() -> list[str]:
+    """Return the list of model types that have trained artifacts on disk."""
+    from winprob.model.artifacts import latest_artifact
+
+    types = []
+    for mt in ("logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"):
+        if latest_artifact(mt, model_dir=_MODEL_DIR, version="v3") is not None:
+            types.append(mt)
+    return types
+
+
+def switch_model(model_type: str) -> None:
+    """Hot-swap the active model and re-score all games.
+
+    Thread-safe: acquires the global lock, loads new model artifacts,
+    recomputes probabilities, then releases the lock.
+    """
+    global _features, _model, _meta, _feature_cols, _active_model_type
+
+    logger.info("Switching active model to '%s' …", model_type)
+    from winprob.model.artifacts import latest_artifact, load_model
+    from winprob.model.train import _predict_proba
+
+    art = latest_artifact(model_type, model_dir=_MODEL_DIR, version="v3")
+    if art is None:
+        raise RuntimeError(f"No trained artifact found for model type '{model_type}'.")
+
+    with _lock:
+        prev_model, prev_meta = _model, _meta
+        prev_feature_cols = _feature_cols
+        prev_active = _active_model_type
+
+        try:
+            _model, _meta = load_model(art)
+            _feature_cols = _meta.feature_cols
+            _active_model_type = model_type
+
+            if _features is not None:
+                updated = _features.copy()
+                updated["prob"] = np.nan
+                has_all_cols = all(c in updated.columns for c in _feature_cols)
+                if has_all_cols:
+                    predictable = updated[_feature_cols].notna().all(axis=1)
+                    if predictable.any():
+                        X = updated.loc[predictable, _feature_cols].astype(float)
+                        probs = _predict_proba(_model, X)
+                        updated.loc[predictable, "prob"] = probs
+                _features = updated
+        except Exception:
+            _model, _meta = prev_model, prev_meta
+            _feature_cols = prev_feature_cols
+            _active_model_type = prev_active
+            raise
+
+    logger.info(
+        "Model switched to '%s' — %d games re-scored.",
+        model_type,
+        int(_features["prob"].notna().sum()) if _features is not None else 0,
+    )
+
+
 def startup(model_type: str = "logistic") -> None:
     """Load features and model into memory.  Called once at application startup."""
-    global _features, _model, _meta, _feature_cols, _git_commit
+    global _features, _model, _meta, _feature_cols, _git_commit, _active_model_type
 
     _git_commit = _resolve_git_commit()
+    _active_model_type = model_type
 
     logger.info("Loading feature data…")
     with _lock:

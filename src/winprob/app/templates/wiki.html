@@ -4,51 +4,31 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Wiki — MLB Win Probability</title>
+  <link rel="stylesheet" href="/static/base.css" />
   <style>
-    :root {
-      --bg: #0f1117; --surface: #1a1d27; --card: #22263a;
-      --border: #2e3350; --accent: #4f8ef7; --accent2: #e74c8e;
-      --text: #e8ecf4; --muted: #8b90a8; --green: #2ecc71; --red: #e74c3c;
-      --gold: #f7c94f; --orange: #f39c12; --purple: #9b59b6;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; position: sticky; top: 0; z-index: 100; }
-    header h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
-    header span { color: var(--muted); font-size: 0.85rem; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
+    .wiki-layout { display: flex; max-width: 1400px; margin: 0 auto; }
 
-    .nav-link {
-      font-size: 0.82rem; color: var(--muted); text-decoration: none;
-      padding: 0.3rem 0.75rem; border: 1px solid var(--border); border-radius: 6px;
-    }
-    .nav-link.active { color: var(--text); border-color: var(--accent); }
-    .nav-link:hover { text-decoration: none; color: var(--text); }
-
-    .layout { display: flex; max-width: 1400px; margin: 0 auto; }
-
-    .sidebar {
+    .wiki-sidebar {
       width: 260px; min-width: 260px; padding: 1.5rem 1rem;
       position: sticky; top: 60px; height: calc(100vh - 60px);
       overflow-y: auto; border-right: 1px solid var(--border);
     }
-    .sidebar h3 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 0.75rem; }
-    .sidebar ul { list-style: none; }
-    .sidebar li { margin-bottom: 0.15rem; }
-    .sidebar a {
+    .wiki-sidebar h3 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 0.75rem; }
+    .wiki-sidebar ul { list-style: none; }
+    .wiki-sidebar li { margin-bottom: 0.15rem; }
+    .wiki-sidebar a {
       display: block; padding: 0.35rem 0.65rem; font-size: 0.8rem;
       color: var(--muted); border-radius: 5px; border-left: 2px solid transparent;
     }
-    .sidebar a:hover { color: var(--text); background: var(--card); text-decoration: none; }
-    .sidebar a.active { color: var(--accent); border-left-color: var(--accent); background: rgba(79,142,247,.06); }
-    .sidebar .sub { padding-left: 1.2rem; }
-    .sidebar .sub a { font-size: 0.76rem; }
+    .wiki-sidebar a:hover { color: var(--text); background: var(--card); text-decoration: none; }
+    .wiki-sidebar a.active { color: var(--accent); border-left-color: var(--accent); background: rgba(79,142,247,.06); }
+    .wiki-sidebar .sub { padding-left: 1.2rem; }
+    .wiki-sidebar .sub a { font-size: 0.76rem; }
 
     .content { flex: 1; padding: 2rem 2.5rem; max-width: 920px; }
     @media (max-width: 900px) {
-      .layout { flex-direction: column; }
-      .sidebar { display: none; }
+      .wiki-layout { flex-direction: column; }
+      .wiki-sidebar { display: none; }
       .content { padding: 1.5rem; }
     }
 
@@ -101,27 +81,45 @@
     .perf-table .best { color: var(--green); font-weight: 700; }
 
     html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+
+    @media (max-width: 768px) {
+      .wiki-layout { grid-template-columns: 1fr; }
+      .wiki-sidebar { position: static; }
+    }
   </style>
 </head>
 <body>
 
-<header>
-  <h1>⚾ MLB Win Probability</h1>
-  <span>Technical Wiki</span>
-  <nav style="margin-left:auto;display:flex;gap:0.6rem">
-    <a href="/" class="nav-link">All Seasons</a>
-    <a href="/season/2026" class="nav-link">2026 Season</a>
-    <a href="/standings" class="nav-link">Standings</a>
-    <a href="/wiki" class="nav-link active">Wiki</a>
-    <a href="/dashboard" class="nav-link">Dashboard</a>
-    <a href="/sitemap" class="nav-link">Sitemap</a>
+<header class="site-header">
+  <a href="/" class="logo">⚾ MLB Win Probability</a>
+  <code class="git-hash">{{ git_commit }}</code>
+  <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+  <nav class="site-nav">
+    <a href="/">All Seasons</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/wiki" class="active">Wiki</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/sitemap">Sitemap</a>
+    <div class="model-selector">
+      <span>Model:</span>
+      <select id="model-select">
+        <option value="logistic">Logistic</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">MLP</option>
+        <option value="stacked">Stacked</option>
+      </select>
+      <span id="model-switching" class="switching" style="display:none">switching…</span>
+    </div>
   </nav>
 </header>
 
-<div class="layout">
+<div class="wiki-layout">
 
 <!-- Sidebar TOC -->
-<aside class="sidebar">
+<aside class="wiki-sidebar">
   <h3>Contents</h3>
   <ul>
     <li><a href="#overview">System Overview</a></li>
@@ -234,8 +232,9 @@
 
 <h3 id="bs-batting">Batting Statistics</h3>
 
+<div class="table-wrap">
 <table class="feature-table">
-  <thead><tr><th>Stat</th><th>Name</th><th>What It Measures</th></tr></thead>
+  <thead><tr><th data-sort="string">Stat</th><th data-sort="string">Name</th><th data-sort="string">What It Measures</th></tr></thead>
   <tbody>
     <tr><td><code>AVG</code></td><td>Batting Average</td><td>Hits per at-bat. A .300 average is excellent; the league average is around .250. Simple but ignores walks and extra-base hits.</td></tr>
     <tr><td><code>OBP</code></td><td>On-Base Percentage</td><td>How often a batter reaches base (hits + walks + hit-by-pitch). Better than AVG because it values walks. League average is ~.320.</td></tr>
@@ -248,11 +247,13 @@
     <tr><td><code>Hard Hit%</code></td><td>Hard Hit Rate</td><td>Percentage of batted balls with exit velocity ≥ 95 mph. Broader than barrel rate, captures overall contact quality.</td></tr>
   </tbody>
 </table>
+</div>
 
 <h3 id="bs-pitching">Pitching Statistics</h3>
 
+<div class="table-wrap">
 <table class="feature-table">
-  <thead><tr><th>Stat</th><th>Name</th><th>What It Measures</th></tr></thead>
+  <thead><tr><th data-sort="string">Stat</th><th data-sort="string">Name</th><th data-sort="string">What It Measures</th></tr></thead>
   <tbody>
     <tr><td><code>ERA</code></td><td>Earned Run Average</td><td>Earned runs allowed per 9 innings pitched. The traditional measure of pitching quality. An ERA under 3.00 is elite; league average is ~4.00–4.50.</td></tr>
     <tr><td><code>WHIP</code></td><td>Walks + Hits per Inning</td><td>Base runners allowed per inning. Measures a pitcher's ability to keep runners off base. Sub-1.00 is elite; league average is ~1.25–1.30.</td></tr>
@@ -265,11 +266,13 @@
     <tr><td><code>xFIP</code></td><td>Expected FIP</td><td>Like FIP but replaces actual HR/FB rate with the league average, since HR/FB has high variance. More stable than FIP for small samples.</td></tr>
   </tbody>
 </table>
+</div>
 
 <h3 id="bs-advanced">Advanced / Sabermetric Measures</h3>
 
+<div class="table-wrap">
 <table class="feature-table">
-  <thead><tr><th>Stat</th><th>Name</th><th>What It Measures</th></tr></thead>
+  <thead><tr><th data-sort="string">Stat</th><th data-sort="string">Name</th><th data-sort="string">What It Measures</th></tr></thead>
   <tbody>
     <tr><td><code>Elo</code></td><td>Elo Rating</td><td>A chess-style rating system adapted for baseball. Every team starts at 1500. After each game, the winner gains points and the loser drops points, with the magnitude depending on the upset factor. Accounts for opponent quality over time.</td></tr>
     <tr><td><code>Pythagorean</code></td><td>Pythagorean Expectation</td><td>Estimates a team's expected winning percentage from runs scored (RS) and runs allowed (RA): <code>RS² / (RS² + RA²)</code>. Teams that win more than their Pythagorean expectation are considered "lucky" and likely to regress.</td></tr>
@@ -278,6 +281,7 @@
     <tr><td><code>Park Factor</code></td><td>Park Run Factor</td><td>How many runs are scored at a given ballpark relative to the league average. Coors Field (Colorado) has a factor around 1.3 (30% more runs); pitcher-friendly parks like Oracle Park are around 0.85.</td></tr>
   </tbody>
 </table>
+</div>
 
 
 <!-- ================================================================== -->
@@ -405,14 +409,16 @@ NewElo = OldElo + K × (Actual - Expected)</code></pre>
   Multi-window rolling statistics capture team form at different time scales. For each of
   <strong>five windows</strong> (7, 14, 15, 30, and 60 games), the system computes:
 </p>
+<div class="table-wrap">
 <table class="feature-table">
-  <thead><tr><th>Stat</th><th>Features</th><th>Description</th></tr></thead>
+  <thead><tr><th data-sort="string">Stat</th><th data-sort="string">Features</th><th data-sort="string">Description</th></tr></thead>
   <tbody>
     <tr><td>Win %</td><td><code>{side}_win_pct_{W}</code></td><td>Winning percentage over the last W games</td></tr>
     <tr><td>Run Diff</td><td><code>{side}_run_diff_{W}</code></td><td>Average run differential per game over W games</td></tr>
     <tr><td>Pythagorean</td><td><code>{side}_pythag_{W}</code></td><td>Expected win% from runs scored/allowed over W games</td></tr>
   </tbody>
 </table>
+</div>
 <p>
   The 7 and 14-game windows capture very recent hot/cold streaks; the 60-game window
   reflects long-term team quality. All use <code>shift(1)</code> to prevent leakage — the
@@ -443,12 +449,14 @@ NewElo = OldElo + K × (Actual - Expected)</code></pre>
 <p>
   From FanGraphs (prior season, available 2002+):
 </p>
+<div class="table-wrap">
 <table class="feature-table">
-  <thead><tr><th>Side</th><th>Batting</th><th>Pitching</th></tr></thead>
+  <thead><tr><th data-sort="string">Side</th><th data-sort="string">Batting</th><th data-sort="string">Pitching</th></tr></thead>
   <tbody>
     <tr><td>Home &amp; Away</td><td>wOBA, Barrel%, Hard Hit%, ISO, BABIP, xwOBA</td><td>FIP, xFIP, K%, BB%, HR/FB, WHIP</td></tr>
   </tbody>
 </table>
+</div>
 <p>
   <strong>Differential features</strong> are also computed: Pythagorean diff (30-game and EWMA),
   home/away split diff, SP ERA diff, wOBA diff, FIP diff, xwOBA diff, WHIP diff, and ISO diff.
@@ -677,8 +685,9 @@ Example (training for 2025 evaluation):
   (LightGBM, XGBoost, CatBoost), using the last 5 seasons of expanding-window CV as the
   objective. The search space includes:
 </p>
+<div class="table-wrap">
 <table class="feature-table">
-  <thead><tr><th>Parameter</th><th>LightGBM Range</th><th>XGBoost Range</th><th>CatBoost Range</th></tr></thead>
+  <thead><tr><th data-sort="string">Parameter</th><th data-sort="string">LightGBM Range</th><th data-sort="string">XGBoost Range</th><th data-sort="string">CatBoost Range</th></tr></thead>
   <tbody>
     <tr><td>Learning rate</td><td>0.01 – 0.15 (log)</td><td>0.01 – 0.15 (log)</td><td>0.01 – 0.15 (log)</td></tr>
     <tr><td>Tree depth/leaves</td><td>num_leaves: 20 – 127</td><td>max_depth: 3 – 9</td><td>depth: 4 – 10</td></tr>
@@ -690,6 +699,7 @@ Example (training for 2025 evaluation):
     <tr><td>Calibration</td><td colspan="3">Platt or Isotonic (tuned as a hyperparameter)</td></tr>
   </tbody>
 </table>
+</div>
 
 <h3 id="t-features">Dynamic Feature Selection</h3>
 <p>
@@ -758,8 +768,9 @@ Example (training for 2025 evaluation):
 
 <h3 id="e-results">Current Performance</h3>
 
+<div class="table-wrap">
 <table class="perf-table">
-  <thead><tr><th>Model</th><th>Mean Brier</th><th>Mean Accuracy</th><th>Cal. Error</th><th>Best Season</th></tr></thead>
+  <thead><tr><th data-sort="string">Model</th><th data-sort="number">Mean Brier</th><th data-sort="number">Mean Accuracy</th><th data-sort="number">Cal. Error</th><th data-sort="string">Best Season</th></tr></thead>
   <tbody>
     <tr><td>Logistic Regression</td><td>0.2444</td><td>56.1%</td><td>0.0286</td><td>2019: 58.4%</td></tr>
     <tr><td>LightGBM</td><td>0.2455</td><td>55.8%</td><td>0.0342</td><td>2019: 57.9%</td></tr>
@@ -770,6 +781,7 @@ Example (training for 2025 evaluation):
     <tr><td class="best">Stacked Ensemble</td><td class="best">0.2446</td><td class="best">56.1%</td><td class="best">0.0286</td><td>2019: 58.5%</td></tr>
   </tbody>
 </table>
+</div>
 
 <div class="info-box">
   <strong>Interpreting the results:</strong> A Brier score of 0.244 means the model's average
@@ -828,14 +840,16 @@ Example (training for 2025 evaluation):
 <p>
   When actual data is available, the system merges predicted and actual standings and computes:
 </p>
+<div class="table-wrap">
 <table class="feature-table">
-  <thead><tr><th>Metric</th><th>Description</th></tr></thead>
+  <thead><tr><th data-sort="string">Metric</th><th data-sort="string">Description</th></tr></thead>
   <tbody>
     <tr><td><code>wins_delta</code></td><td>Actual wins minus predicted wins &mdash; positive means the team is outperforming the model</td></tr>
     <tr><td><code>pct_delta</code></td><td>Actual win% minus predicted win%</td></tr>
     <tr><td><code>rank_delta</code></td><td>Actual division rank minus predicted rank &mdash; negative means the team is higher than predicted</td></tr>
   </tbody>
 </table>
+</div>
 <p>
   League leaders are computed separately for both predicted and actual standings, allowing direct
   comparison of which teams the model expected to lead each league versus which teams actually do.
@@ -881,8 +895,9 @@ Example (training for 2025 evaluation):
   <li><strong>Baseline diff:</strong> current vs. the first snapshot of the season — tracks cumulative drift over time</li>
 </ul>
 <p>Each diff produces per-game deltas and aggregate metrics:</p>
+<div class="table-wrap">
 <table class="feature-table">
-  <thead><tr><th>Metric</th><th>Description</th></tr></thead>
+  <thead><tr><th data-sort="string">Metric</th><th data-sort="string">Description</th></tr></thead>
   <tbody>
     <tr><td><code>mean_abs_delta</code></td><td>Average absolute probability change across all games</td></tr>
     <tr><td><code>p95_abs_delta</code></td><td>95th percentile of absolute changes</td></tr>
@@ -891,6 +906,7 @@ Example (training for 2025 evaluation):
     <tr><td><code>pct_gt_0p05</code></td><td>% of games with delta > 5 percentage points</td></tr>
   </tbody>
 </table>
+</div>
 
 
 <!-- ================================================================== -->
@@ -901,8 +917,9 @@ Example (training for 2025 evaluation):
   traceable. All domain errors inherit from <code>WinProbError</code>:
 </p>
 
+<div class="table-wrap">
 <table class="feature-table">
-  <thead><tr><th>Error Class</th><th>When It Fires</th></tr></thead>
+  <thead><tr><th data-sort="string">Error Class</th><th data-sort="string">When It Fires</th></tr></thead>
   <tbody>
     <tr><td><code>IngestionError</code></td><td>Raw data download or parsing fails (e.g., Retrosheet unavailable, malformed API response)</td></tr>
     <tr><td><code>APIError</code></td><td>MLB Stats API communication failure (timeouts, rate limits, unexpected status codes)</td></tr>
@@ -912,6 +929,7 @@ Example (training for 2025 evaluation):
     <tr><td><code>SnapshotIntegrityError</code></td><td>Immutable prediction snapshot is corrupt or violates its schema</td></tr>
   </tbody>
 </table>
+</div>
 
 <p>
   <strong>Silent failure is forbidden.</strong> Every <code>except</code> block in the codebase
@@ -973,7 +991,7 @@ Live standings data ──▶ MLB Stats API (wins, losses, batting stats, pitchi
 </div>
 
 <script>
-const tocLinks = document.querySelectorAll('.sidebar a[href^="#"]');
+const tocLinks = document.querySelectorAll('.wiki-sidebar a[href^="#"]');
 const sections = Array.from(tocLinks).map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
 
 function updateActive() {
@@ -988,6 +1006,7 @@ function updateActive() {
 window.addEventListener('scroll', updateActive, { passive: true });
 updateActive();
 </script>
+<script src="/static/base.js"></script>
 
 </body>
 </html>

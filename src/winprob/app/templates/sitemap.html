@@ -4,61 +4,60 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sitemap — MLB Win Probability</title>
+  <link rel="stylesheet" href="/static/base.css" />
   <style>
-    :root {
-      --bg: #0f1117; --surface: #1a1d27; --card: #22263a;
-      --border: #2e3350; --accent: #4f8ef7; --accent2: #e74c8e;
-      --text: #e8ecf4; --muted: #8b90a8; --green: #2ecc71; --red: #e74c3c;
-      --gold: #f7c94f;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
-    header h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
-    header nav { display: flex; gap: 0.75rem; margin-left: auto; }
-    header nav a { font-size: 0.82rem; color: var(--muted); text-decoration: none; padding: 0.3rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; }
-    header nav a:hover, header nav a.active { color: var(--text); border-color: var(--accent); }
-    .container { max-width: 960px; margin: 0 auto; padding: 1.5rem; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-
     .hero { background: linear-gradient(135deg, #1a1d27 0%, #0f1117 100%); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; position: relative; overflow: hidden; }
     .hero::before { content: ''; position: absolute; top: -60px; right: -60px; width: 200px; height: 200px; border-radius: 50%; background: rgba(79,142,247,.06); }
     .hero-badge { display: inline-block; background: rgba(79,142,247,.12); color: var(--accent); font-size: 0.72rem; font-weight: 700; letter-spacing: .06em; padding: 0.25rem 0.65rem; border-radius: 20px; margin-bottom: 0.75rem; text-transform: uppercase; }
     .hero h2 { font-size: 1.75rem; font-weight: 800; margin-bottom: 0.4rem; }
     .hero p { font-size: 0.88rem; color: var(--muted); max-width: 600px; line-height: 1.6; }
-
     .section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.25rem; }
     .section h3 { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
     .section-icon { font-size: 1rem; }
-
     .link-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem; }
     .link-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem 1rem; transition: border-color 0.15s; }
     .link-card:hover { border-color: var(--accent); }
     .link-card a { font-size: 0.92rem; font-weight: 600; display: block; margin-bottom: 0.3rem; }
     .link-card .path { font-size: 0.75rem; color: var(--muted); font-family: 'SF Mono', 'Fira Code', monospace; margin-bottom: 0.3rem; }
     .link-card .desc { font-size: 0.8rem; color: var(--muted); line-height: 1.45; }
-
     .method-badge { display: inline-block; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; font-family: monospace; margin-right: 0.35rem; }
     .method-get { background: rgba(46,204,113,.12); color: var(--green); }
     .method-post { background: rgba(231,76,60,.12); color: var(--red); }
+    @media (max-width: 768px) {
+      .link-grid { grid-template-columns: 1fr; }
+      .hero { padding: 1.25rem; }
+      .hero h2 { font-size: 1.3rem; }
+    }
   </style>
 </head>
 <body>
-<header>
-  <h1>&#9918; MLB Win Probability</h1>
-  <code style="font-size:0.72rem;background:var(--card);padding:0.15rem 0.4rem;border-radius:4px;color:var(--accent)">{{ git_commit }}</code>
-  <nav>
+<header class="site-header">
+  <a href="/" class="logo">⚾ MLB Win Probability</a>
+  <code class="git-hash">{{ git_commit }}</code>
+  <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+  <nav class="site-nav">
     <a href="/">All Seasons</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
     <a href="/wiki">Wiki</a>
     <a href="/dashboard">Dashboard</a>
     <a href="/sitemap" class="active">Sitemap</a>
+    <div class="model-selector">
+      <span>Model:</span>
+      <select id="model-select">
+        <option value="logistic">Logistic</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">MLP</option>
+        <option value="stacked">Stacked</option>
+      </select>
+      <span id="model-switching" class="switching" style="display:none">switching…</span>
+    </div>
   </nav>
 </header>
 
-<div class="container">
+<div class="container-narrow">
   <div class="hero">
     <div class="hero-badge">Navigation</div>
     <h2>Sitemap</h2>
@@ -186,5 +185,6 @@
     </div>
   </div>
 </div>
+<script src="/static/base.js"></script>
 </body>
 </html>

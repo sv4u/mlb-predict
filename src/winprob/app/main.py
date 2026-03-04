@@ -14,6 +14,7 @@ from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 from winprob.app.admin import (
     PipelineKind,
@@ -25,10 +26,13 @@ from winprob.app.admin import (
 )
 from winprob.app.data_cache import (
     TEAM_NAMES,
+    available_model_types,
+    get_active_model_type,
     get_features,
     get_git_commit,
     get_model,
     startup,
+    switch_model,
 )
 from winprob.standings import (
     DIVISION_DISPLAY_ORDER,
@@ -74,7 +78,9 @@ def _reload_app() -> None:
 @app.on_event("startup")
 async def _startup() -> None:
     model_type = os.environ.get("WINPROB_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
+    logger.info("Application startup: model_type=%s", model_type)
     startup(model_type)
+    logger.info("Startup complete — serving on model '%s'", model_type)
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +130,15 @@ def api_games(
     order: Annotated[str, Query()] = "desc",
 ) -> dict:
     """Query games with optional filters."""
+    logger.debug(
+        "GET /api/games season=%s home=%s away=%s date=%s limit=%d offset=%d",
+        season,
+        home,
+        away,
+        date,
+        limit,
+        offset,
+    )
     df = get_features()
     if season:
         df = df[df["season"] == season]
@@ -166,6 +181,7 @@ def api_games(
 @app.get("/api/games/{game_pk}", response_model=None)
 def api_game_detail(game_pk: int) -> dict | JSONResponse:
     """Full feature breakdown + SHAP attribution for a single game."""
+    logger.debug("GET /api/games/%d", game_pk)
     df = get_features()
     matches = df[df["game_pk"] == game_pk]
     if matches.empty:
@@ -300,6 +316,7 @@ async def api_standings(
     in the features cache.  Actual standings are fetched live from the
     MLB Stats API when available.
     """
+    logger.debug("GET /api/standings season=%d", season)
     from winprob.mlbapi.client import MLBAPIClient
     from winprob.mlbapi.standings import fetch_standings
 
@@ -458,8 +475,13 @@ async def api_team_stats(
 
 
 def _ctx(request: Request, **extra: object) -> dict:
-    """Build a base template context with version info."""
-    return {"request": request, "git_commit": get_git_commit(), **extra}
+    """Build a base template context with version info and active model."""
+    return {
+        "request": request,
+        "git_commit": get_git_commit(),
+        "active_model": get_active_model_type(),
+        **extra,
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -522,6 +544,42 @@ async def page_wiki(request: Request):
 async def page_dashboard(request: Request):
     """Admin dashboard with retrain/ingest controls and system status."""
     return templates.TemplateResponse("dashboard.html", _ctx(request))
+
+
+# ---------------------------------------------------------------------------
+# Model switching API
+# ---------------------------------------------------------------------------
+
+_VALID_MODEL_TYPES = ("logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked")
+
+
+class _SwitchModelRequest(BaseModel):
+    model_type: str
+
+
+@app.get("/api/active-model")
+def api_active_model() -> dict:
+    """Return the currently active model type and available alternatives."""
+    return {
+        "model_type": get_active_model_type(),
+        "available": available_model_types(),
+    }
+
+
+@app.post("/api/admin/switch-model")
+def api_switch_model(body: _SwitchModelRequest) -> dict:
+    """Hot-swap the active prediction model at runtime."""
+    model_type = body.model_type.lower().strip()
+    if model_type not in _VALID_MODEL_TYPES:
+        return {"ok": False, "message": f"Unknown model type '{model_type}'."}
+    try:
+        logger.info("API request to switch model to '%s'", model_type)
+        switch_model(model_type)
+        os.environ["WINPROB_MODEL_TYPE"] = model_type
+        return {"ok": True, "model_type": model_type, "message": f"Switched to {model_type}."}
+    except Exception as exc:
+        logger.error("Model switch failed: %s", exc)
+        return {"ok": False, "message": str(exc)}
 
 
 # ---------------------------------------------------------------------------

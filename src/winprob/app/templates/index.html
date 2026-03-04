@@ -4,53 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MLB Win Probability</title>
+  <link rel="stylesheet" href="/static/base.css" />
   <style>
-    :root {
-      --bg: #0f1117; --surface: #1a1d27; --card: #22263a;
-      --border: #2e3350; --accent: #4f8ef7; --accent2: #e74c8e;
-      --text: #e8ecf4; --muted: #8b90a8; --green: #2ecc71; --red: #e74c3c;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
-    header h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
-    header span { color: var(--muted); font-size: 0.85rem; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
-    .filters { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; }
-    .filters label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8rem; color: var(--muted); }
-    .filters select, .filters input { background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 0.45rem 0.75rem; font-size: 0.9rem; }
-    button { background: var(--accent); border: none; border-radius: 6px; color: white; padding: 0.5rem 1.25rem; font-size: 0.9rem; cursor: pointer; font-weight: 600; }
-    button:hover { opacity: 0.85; }
-    button.sec { background: var(--card); border: 1px solid var(--border); }
-    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; }
-    .tab { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 0.45rem 1rem; cursor: pointer; font-size: 0.85rem; color: var(--muted); }
-    .tab.active { background: var(--accent); border-color: var(--accent); color: white; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-    th { background: var(--card); color: var(--muted); font-weight: 600; padding: 0.65rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
-    th:hover { color: var(--text); }
-    td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
-    tr:hover td { background: var(--card); }
-    .prob-bar { display: flex; align-items: center; gap: 0.5rem; }
-    .bar-wrap { flex: 1; background: var(--border); border-radius: 4px; height: 8px; max-width: 120px; }
-    .bar-fill { height: 8px; border-radius: 4px; }
-    .home-win { color: var(--green); font-weight: 600; }
-    .away-win { color: var(--red); }
-    .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-    .badge-home { background: rgba(46,204,113,.15); color: var(--green); }
-    .badge-away { background: rgba(231,76,60,.15); color: var(--red); }
-    .badge-neutral { background: rgba(79,142,247,.1); color: var(--accent); }
-    .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; font-size: 0.85rem; color: var(--muted); }
-    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
-    .stat-card .label { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.35rem; }
-    .stat-card .value { font-size: 1.5rem; font-weight: 700; }
     .chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; }
     .chart-wrap h3 { margin-bottom: 1rem; font-size: 0.95rem; color: var(--muted); }
     #cv-chart { width: 100%; height: 240px; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .section-title { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .75rem; }
-    /* Model cards */
+    .home-win { color: var(--green); font-weight: 600; }
+    .away-win { color: var(--red); }
     .models-toggle { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none; margin-bottom: 1rem; font-size: 0.8rem; color: var(--muted); }
     .models-toggle:hover { color: var(--text); }
     .models-toggle .arrow { transition: transform 0.2s; display: inline-block; }
@@ -73,28 +33,35 @@
     .model-perf { margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid var(--border); display: flex; gap: 1rem; font-size: 0.78rem; }
     .model-perf span { color: var(--muted); }
     .model-perf strong { color: var(--text); }
+    @media (max-width: 768px) {
+      .model-cards { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-<header>
-  <h1>⚾ MLB Win Probability</h1>
-  <span>2000 – 2026 • v3 model • <code
-      style="font-size:0.75rem;background:var(--card);padding:0.15rem 0.4rem;border-radius:4px;color:var(--accent)">{{ git_commit }}</code></span>
-  <nav style="margin-left:auto;display:flex;gap:0.6rem">
-    <a href="/"
-      style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px;color:var(--text);border-color:var(--accent)">All
-      Seasons</a>
-    <a href="/season/2026"
-      style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">2026
-      Season ✦</a>
-    <a href="/standings"
-      style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">Standings</a>
-    <a href="/wiki"
-      style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">Wiki</a>
-    <a href="/dashboard"
-      style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">Dashboard</a>
-    <a href="/sitemap"
-      style="font-size:0.82rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:6px">Sitemap</a>
+<header class="site-header">
+  <a href="/" class="logo">⚾ MLB Win Probability</a>
+  <span class="meta">2000–2026 • v3 • <code class="git-hash">{{ git_commit }}</code></span>
+  <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+  <nav class="site-nav">
+    <a href="/" class="active">All Seasons</a>
+    <a href="/season/2026">2026 Season</a>
+    <a href="/standings">Standings</a>
+    <a href="/wiki">Wiki</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/sitemap">Sitemap</a>
+    <div class="model-selector">
+      <span>Model:</span>
+      <select id="model-select">
+        <option value="logistic">Logistic</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">MLP</option>
+        <option value="stacked">Stacked</option>
+      </select>
+      <span id="model-switching" class="switching" style="display:none">switching…</span>
+    </div>
   </nav>
 </header>
 
@@ -314,6 +281,7 @@
 
 </div>
 
+<script src="/static/base.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -460,9 +428,9 @@ async function loadGames() {
     return;
   }
 
-  let html = `<table>
+  let html = `<div class="table-wrap"><table>
     <thead><tr>
-      <th>Date</th><th>Matchup</th><th>P(home win)</th><th>P(away win)</th><th>Result</th>
+      <th data-sort="date">Date</th><th data-sort="string">Matchup</th><th data-sort="percent">P(home win)</th><th data-sort="percent">P(away win)</th><th data-sort="string">Result</th>
     </tr></thead><tbody>`;
 
   data.games.forEach(g => {
@@ -482,8 +450,9 @@ async function loadGames() {
     </tr>`;
   });
 
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   $('table-wrap').innerHTML = html;
+  initAllSortables();
   renderPagination();
 }
 
@@ -506,8 +475,8 @@ async function loadUpsets() {
     return;
   }
 
-  let html = `<table><thead><tr>
-    <th>Date</th><th>Away</th><th>@</th><th>Home</th><th>Favourite</th><th>Fav prob</th><th>Winner</th>
+  let html = `<div class="table-wrap"><table><thead><tr>
+    <th data-sort="date">Date</th><th data-sort="string">Away</th><th>@</th><th data-sort="string">Home</th><th data-sort="string">Favourite</th><th data-sort="percent">Fav prob</th><th data-sort="string">Winner</th>
   </tr></thead><tbody>`;
 
   data.forEach(g => {
@@ -526,8 +495,9 @@ async function loadUpsets() {
     </tr>`;
   });
 
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   $('table-wrap').innerHTML = html;
+  initAllSortables();
   $('pagination').innerHTML = '';
 }
 

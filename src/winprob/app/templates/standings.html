@@ -4,42 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Standings — MLB Win Probability</title>
+  <link rel="stylesheet" href="/static/base.css" />
   <style>
-    :root {
-      --bg: #0f1117; --surface: #1a1d27; --card: #22263a;
-      --border: #2e3350; --accent: #4f8ef7; --accent2: #e74c8e;
-      --text: #e8ecf4; --muted: #8b90a8; --green: #2ecc71; --red: #e74c3c;
-      --gold: #f7c94f; --orange: #e67e22;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
-    header h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
-    header nav { display: flex; gap: 0.75rem; margin-left: auto; }
-    header nav a { font-size: 0.82rem; color: var(--muted); text-decoration: none; padding: 0.3rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; }
-    header nav a:hover, header nav a.active { color: var(--text); border-color: var(--accent); }
-    .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-
-    /* Hero */
     .hero { background: linear-gradient(135deg, #1a1d27 0%, #0f1117 100%); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; position: relative; overflow: hidden; }
     .hero::before { content: ''; position: absolute; top: -60px; right: -60px; width: 200px; height: 200px; border-radius: 50%; background: rgba(79,142,247,.06); }
     .hero-badge { display: inline-block; background: rgba(79,142,247,.12); color: var(--accent); font-size: 0.72rem; font-weight: 700; letter-spacing: .06em; padding: 0.25rem 0.65rem; border-radius: 20px; margin-bottom: 0.75rem; text-transform: uppercase; }
     .hero h2 { font-size: 1.75rem; font-weight: 800; margin-bottom: 0.4rem; }
     .hero p { font-size: 0.88rem; color: var(--muted); max-width: 700px; line-height: 1.6; }
-
-    /* Tabs */
-    .tab-bar { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-    .tab-btn { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 1.1rem; cursor: pointer; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
-    .tab-btn:hover { color: var(--text); border-color: var(--accent); }
-    .tab-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-
-    /* League leaders */
     .leaders-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.75rem; }
-    @media (max-width: 700px) { .leaders-grid { grid-template-columns: 1fr; } }
     .leader-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; }
     .leader-card h3 { font-size: 0.92rem; color: var(--muted); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: .04em; }
     .leader-row { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
@@ -47,63 +21,50 @@
     .leader-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
     .leader-team { font-size: 1rem; font-weight: 700; }
     .leader-record { font-size: 0.9rem; color: var(--muted); }
-
-    /* Division tables */
     .division-section { margin-bottom: 2rem; }
     .division-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
     .division-header h3 { font-size: 1rem; font-weight: 700; }
     .division-badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; }
-    .badge-al { background: rgba(79,142,247,.12); color: var(--accent); }
-    .badge-nl { background: rgba(231,76,142,.12); color: var(--accent2); }
-
-    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
-    th { background: var(--card); color: var(--muted); font-weight: 600; padding: 0.55rem 0.65rem; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
-    td { padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border); }
-    tr:hover td { background: var(--card); }
-    td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    th.num { text-align: right; }
-
-    .delta-pos { color: var(--green); font-weight: 600; }
-    .delta-neg { color: var(--red); font-weight: 600; }
-    .delta-zero { color: var(--muted); }
-
     .team-name { font-weight: 600; }
-
-    /* Stats tables */
     .stats-section { margin-bottom: 2rem; }
     .stats-section h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem; }
-    .stats-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+    .stats-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 8px; }
     .stats-table-wrap table { min-width: 900px; }
-
-    /* Loading / error */
-    .loading { text-align: center; padding: 3rem; color: var(--muted); }
-    .spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .error-msg { background: rgba(231,76,60,.08); border: 1px solid rgba(231,76,60,.25); border-radius: 8px; padding: 1rem; color: var(--red); font-size: 0.88rem; }
-
-    /* Responsive */
-    @media (max-width: 600px) {
-      .container { padding: 0.75rem; }
-      table { font-size: 0.78rem; }
-      th, td { padding: 0.4rem 0.45rem; }
+    @media (max-width: 768px) {
+      .leaders-grid { grid-template-columns: 1fr; }
+      .hero { padding: 1.25rem; }
+      .hero h2 { font-size: 1.3rem; }
     }
   </style>
 </head>
 <body>
-<header>
-  <h1>&#9918; MLB Win Probability</h1>
-  <code style="font-size:0.72rem;background:var(--card);padding:0.15rem 0.4rem;border-radius:4px;color:var(--accent)">{{ git_commit }}</code>
-  <nav>
+<header class="site-header">
+  <a href="/" class="logo">⚾ MLB Win Probability</a>
+  <code class="git-hash">{{ git_commit }}</code>
+  <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+  <nav class="site-nav">
     <a href="/">All Seasons</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings" class="active">Standings</a>
     <a href="/wiki">Wiki</a>
     <a href="/dashboard">Dashboard</a>
     <a href="/sitemap">Sitemap</a>
+    <div class="model-selector">
+      <span>Model:</span>
+      <select id="model-select">
+        <option value="logistic">Logistic</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">MLP</option>
+        <option value="stacked">Stacked</option>
+      </select>
+      <span id="model-switching" class="switching" style="display:none">switching…</span>
+    </div>
   </nav>
 </header>
 
-<div class="container">
+<div class="container-wide">
   <div class="hero">
     <div class="hero-badge">Predicted vs Actual</div>
     <h2>2026 Season Standings</h2>
@@ -143,10 +104,10 @@
   </div>
 </div>
 
+<script src="/static/base.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 
-// ── Tab switching ─────────────────────────────────────────────────────────
 let statsLoaded = false;
 
 function showTab(name) {
@@ -172,7 +133,7 @@ function deltaHtml(val, decimals = 0, invert = false) {
   const v = invert ? -val : val;
   const sign = v > 0 ? '+' : '';
   const cls = v > 0 ? 'delta-pos' : v < 0 ? 'delta-neg' : 'delta-zero';
-  return `<span class="${cls}">${sign}${val.toFixed(decimals)}</span>`;
+  return `<span class="${cls}">${sign}${v.toFixed(decimals)}</span>`;
 }
 
 // ── Standings ─────────────────────────────────────────────────────────────
@@ -243,23 +204,23 @@ function renderDivisions(divisions) {
       </div>
       <div class="stats-table-wrap"><table>
         <thead><tr>
-          <th>Team</th>
-          <th class="num">Pred W</th>
-          <th class="num">Pred L</th>
-          <th class="num">Pred %</th>
-          <th class="num">Pred GB</th>`;
+          <th data-sort="string">Team</th>
+          <th class="num" data-sort="number">Pred W</th>
+          <th class="num" data-sort="number">Pred L</th>
+          <th class="num" data-sort="percent">Pred %</th>
+          <th class="num" data-sort="number">Pred GB</th>`;
 
     if (hasActual) {
       html += `
-          <th class="num">Act W</th>
-          <th class="num">Act L</th>
-          <th class="num">Act %</th>
-          <th class="num">Act GB</th>
-          <th class="num">RS</th>
-          <th class="num">RA</th>
-          <th class="num">Diff</th>
-          <th class="num">&Delta; W</th>
-          <th class="num">&Delta; %</th>`;
+          <th class="num" data-sort="number">Act W</th>
+          <th class="num" data-sort="number">Act L</th>
+          <th class="num" data-sort="percent">Act %</th>
+          <th class="num" data-sort="number">Act GB</th>
+          <th class="num" data-sort="number">RS</th>
+          <th class="num" data-sort="number">RA</th>
+          <th class="num" data-sort="number">Diff</th>
+          <th class="num" data-sort="number">&Delta; W</th>
+          <th class="num" data-sort="percent">&Delta; %</th>`;
     }
     html += '</tr></thead><tbody>';
 
@@ -293,6 +254,7 @@ function renderDivisions(divisions) {
   });
 
   $('standings-area').innerHTML = html;
+  initAllSortables();
 }
 
 // ── Team Stats ────────────────────────────────────────────────────────────
@@ -317,11 +279,11 @@ function renderBatting(teams) {
     <h3>Team Batting Statistics</h3>
     <div class="stats-table-wrap"><table>
       <thead><tr>
-        <th>#</th><th>Team</th><th>Record</th>
-        <th class="num">AVG</th><th class="num">OBP</th><th class="num">SLG</th><th class="num">OPS</th>
-        <th class="num">R</th><th class="num">H</th><th class="num">2B</th><th class="num">3B</th>
-        <th class="num">HR</th><th class="num">RBI</th><th class="num">SB</th>
-        <th class="num">BB</th><th class="num">SO</th>
+        <th data-sort="number">#</th><th data-sort="string">Team</th><th data-sort="string">Record</th>
+        <th class="num" data-sort="number">AVG</th><th class="num" data-sort="number">OBP</th><th class="num" data-sort="number">SLG</th><th class="num" data-sort="number">OPS</th>
+        <th class="num" data-sort="number">R</th><th class="num" data-sort="number">H</th><th class="num" data-sort="number">2B</th><th class="num" data-sort="number">3B</th>
+        <th class="num" data-sort="number">HR</th><th class="num" data-sort="number">RBI</th><th class="num" data-sort="number">SB</th>
+        <th class="num" data-sort="number">BB</th><th class="num" data-sort="number">SO</th>
       </tr></thead><tbody>`;
 
   sorted.forEach((t, i) => {
@@ -347,6 +309,7 @@ function renderBatting(teams) {
   });
   html += '</tbody></table></div></div>';
   $('batting-area').innerHTML = html;
+  initAllSortables();
 }
 
 function renderPitching(teams) {
@@ -359,10 +322,10 @@ function renderPitching(teams) {
     <h3>Team Pitching Statistics</h3>
     <div class="stats-table-wrap"><table>
       <thead><tr>
-        <th>#</th><th>Team</th><th>Record</th>
-        <th class="num">ERA</th><th class="num">W</th><th class="num">L</th><th class="num">SV</th>
-        <th class="num">IP</th><th class="num">H</th><th class="num">BB</th><th class="num">SO</th>
-        <th class="num">WHIP</th><th class="num">HR</th>
+        <th data-sort="number">#</th><th data-sort="string">Team</th><th data-sort="string">Record</th>
+        <th class="num" data-sort="number">ERA</th><th class="num" data-sort="number">W</th><th class="num" data-sort="number">L</th><th class="num" data-sort="number">SV</th>
+        <th class="num" data-sort="number">IP</th><th class="num" data-sort="number">H</th><th class="num" data-sort="number">BB</th><th class="num" data-sort="number">SO</th>
+        <th class="num" data-sort="number">WHIP</th><th class="num" data-sort="number">HR</th>
       </tr></thead><tbody>`;
 
   sorted.forEach((t, i) => {
@@ -385,6 +348,7 @@ function renderPitching(teams) {
   });
   html += '</tbody></table></div></div>';
   $('pitching-area').innerHTML = html;
+  initAllSortables();
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────

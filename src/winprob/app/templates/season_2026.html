@@ -4,64 +4,23 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>2026 Season — MLB Win Probability</title>
+  <link rel="stylesheet" href="/static/base.css" />
   <style>
-    :root {
-      --bg: #0f1117; --surface: #1a1d27; --card: #22263a;
-      --border: #2e3350; --accent: #4f8ef7; --accent2: #e74c8e;
-      --text: #e8ecf4; --muted: #8b90a8; --green: #2ecc71; --red: #e74c3c;
-      --gold: #f7c94f;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
-    header h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
-    header nav { display: flex; gap: 0.75rem; margin-left: auto; }
-    header nav a { font-size: 0.82rem; color: var(--muted); text-decoration: none; padding: 0.3rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; }
-    header nav a:hover, header nav a.active { color: var(--text); border-color: var(--accent); }
-    .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
-
-    /* Hero */
     .hero { background: linear-gradient(135deg, #1a1d27 0%, #0f1117 100%); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; position: relative; overflow: hidden; }
     .hero::before { content: ''; position: absolute; top: -60px; right: -60px; width: 200px; height: 200px; border-radius: 50%; background: rgba(79,142,247,.06); }
     .hero-badge { display: inline-block; background: rgba(79,142,247,.12); color: var(--accent); font-size: 0.72rem; font-weight: 700; letter-spacing: .06em; padding: 0.25rem 0.65rem; border-radius: 20px; margin-bottom: 0.75rem; text-transform: uppercase; }
     .hero h2 { font-size: 1.75rem; font-weight: 800; margin-bottom: 0.4rem; }
     .hero p { font-size: 0.88rem; color: var(--muted); max-width: 600px; line-height: 1.6; }
     .hero-stats { display: flex; gap: 2rem; margin-top: 1.25rem; flex-wrap: wrap; }
-    .hero-stat { }
     .hero-stat .num { font-size: 1.6rem; font-weight: 700; color: var(--accent); }
     .hero-stat .lbl { font-size: 0.72rem; color: var(--muted); margin-top: 0.1rem; }
-
-    /* Caveat banner */
     .caveat { background: rgba(247,201,79,.06); border: 1px solid rgba(247,201,79,.25); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.82rem; color: var(--gold); line-height: 1.55; }
     .caveat strong { color: var(--gold); }
-
-    /* Filters */
-    .filters { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.25rem; margin-bottom: 1.25rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; }
-    .filters label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8rem; color: var(--muted); }
-    .filters select, .filters input { background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 0.45rem 0.75rem; font-size: 0.9rem; }
-    button { background: var(--accent); border: none; border-radius: 6px; color: white; padding: 0.5rem 1.25rem; font-size: 0.9rem; cursor: pointer; font-weight: 600; }
-    button:hover { opacity: 0.85; }
-    button.sec { background: var(--card); border: 1px solid var(--border); }
-
-    /* Table */
-    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-    th { background: var(--card); color: var(--muted); font-weight: 600; padding: 0.65rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-    td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
-    tr:hover td { background: var(--card); }
-    .prob-bar { display: flex; align-items: center; gap: 0.5rem; }
-    .bar-wrap { flex: 1; background: var(--border); border-radius: 4px; height: 8px; max-width: 100px; }
-    .bar-fill { height: 8px; border-radius: 4px; }
-    .badge { display: inline-block; padding: 0.18rem 0.5rem; border-radius: 4px; font-size: 0.73rem; font-weight: 600; }
     .badge-soon { background: rgba(247,201,79,.12); color: var(--gold); }
     .badge-upcoming { background: rgba(79,142,247,.1); color: var(--accent); }
     .badge-home-fav { background: rgba(46,204,113,.12); color: var(--green); }
     .badge-away-fav { background: rgba(231,76,60,.1); color: var(--red); }
     .badge-tossup { background: rgba(139,144,168,.1); color: var(--muted); }
-    .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; font-size: 0.85rem; color: var(--muted); }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-
-    /* Standings summary */
     .standings-summary { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; }
     .standings-summary h3 { font-size: 0.88rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.6rem; }
     .standings-summary h3 a { font-size: 0.78rem; font-weight: 400; text-transform: none; letter-spacing: normal; }
@@ -69,22 +28,16 @@
     .summary-div { background: var(--card); border-radius: 8px; padding: 0.85rem; }
     .summary-div-header { font-size: 0.78rem; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem; }
     .summary-div-badge { display: inline-block; padding: 0.12rem 0.4rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; }
-    .badge-al { background: rgba(79,142,247,.12); color: var(--accent); }
-    .badge-nl { background: rgba(231,76,142,.12); color: #e74c8e; }
     .summary-team-row { display: flex; justify-content: space-between; align-items: center; padding: 0.22rem 0; font-size: 0.8rem; }
     .summary-team-row .rank { color: var(--muted); width: 1.2rem; text-align: right; margin-right: 0.4rem; }
     .summary-team-row .name { flex: 1; font-weight: 500; }
     .summary-team-row .record { color: var(--muted); font-variant-numeric: tabular-nums; }
     .summary-leader-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
-    @media (max-width: 700px) { .summary-leader-cards { grid-template-columns: 1fr; } }
     .leader-mini { background: var(--card); border-radius: 8px; padding: 0.75rem; }
     .leader-mini-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 0.35rem; }
     .leader-mini-team { font-size: 0.95rem; font-weight: 700; }
     .leader-mini-record { font-size: 0.82rem; color: var(--muted); }
-
-    /* Team power rankings sidebar */
     .layout { display: grid; grid-template-columns: 1fr 260px; gap: 1.25rem; align-items: start; }
-    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
     .rankings-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem; position: sticky; top: 1rem; }
     .rankings-card h3 { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1rem; }
     .rank-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
@@ -94,20 +47,39 @@
     .rank-elo { color: var(--muted); font-size: 0.75rem; }
     .rank-bar-wrap { width: 50px; height: 5px; background: var(--border); border-radius: 3px; }
     .rank-bar { height: 5px; border-radius: 3px; background: var(--accent); }
+    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) {
+      .hero { padding: 1.25rem; }
+      .hero h2 { font-size: 1.3rem; }
+      .summary-leader-cards { grid-template-columns: 1fr; }
+      .summary-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-<header>
-  <h1>⚾ MLB Win Probability</h1>
-  <code
-    style="font-size:0.72rem;background:var(--card);padding:0.15rem 0.4rem;border-radius:4px;color:var(--accent)">{{ git_commit }}</code>
-  <nav>
+<header class="site-header">
+  <a href="/" class="logo">⚾ MLB Win Probability</a>
+  <code class="git-hash">{{ git_commit }}</code>
+  <button class="hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>
+  <nav class="site-nav">
     <a href="/">All Seasons</a>
     <a href="/season/2026" class="active">2026 Season</a>
     <a href="/standings">Standings</a>
     <a href="/wiki">Wiki</a>
     <a href="/dashboard">Dashboard</a>
     <a href="/sitemap">Sitemap</a>
+    <div class="model-selector">
+      <span>Model:</span>
+      <select id="model-select">
+        <option value="logistic">Logistic</option>
+        <option value="lightgbm">LightGBM</option>
+        <option value="xgboost">XGBoost</option>
+        <option value="catboost">CatBoost</option>
+        <option value="mlp">MLP</option>
+        <option value="stacked">Stacked</option>
+      </select>
+      <span id="model-switching" class="switching" style="display:none">switching…</span>
+    </div>
   </nav>
 </header>
 
@@ -174,6 +146,7 @@
   </div>
 </div>
 
+<script src="/static/base.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 let currentPage = 0;
@@ -341,10 +314,10 @@ async function loadGames(page = 0) {
       return;
     }
 
-    let html = `<table>
+    let html = `<div class="table-wrap"><table>
       <thead><tr>
-        <th>Date</th><th>Countdown</th><th>Matchup</th>
-        <th>P(home win)</th><th>P(away win)</th><th>Outlook</th>
+        <th data-sort="date">Date</th><th data-sort="string">Countdown</th><th data-sort="string">Matchup</th>
+        <th data-sort="percent">P(home win)</th><th data-sort="percent">P(away win)</th><th data-sort="string">Outlook</th>
       </tr></thead><tbody>`;
 
     games.forEach(g => {
@@ -370,8 +343,9 @@ async function loadGames(page = 0) {
       </tr>`;
     });
 
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     $('table-wrap').innerHTML = html;
+    initAllSortables();
     renderPagination(data.total);
   } catch (e) {
     $('table-wrap').innerHTML = `<p style="color:var(--red);padding:1.5rem">Failed to load games: ${e.message}</p>`;
