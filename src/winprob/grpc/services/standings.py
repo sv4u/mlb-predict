@@ -27,9 +27,7 @@ def _row_to_team_standing(row: Any) -> common_pb2.TeamStanding:
     ts = common_pb2.TeamStanding(
         retro_code=str(row.get("retro_code", "")),
         mlb_id=int(row.get("mlb_id", 0)),
-        team_name=TEAM_NAMES.get(
-            str(row.get("retro_code", "")), str(row.get("team_name", ""))
-        ),
+        team_name=TEAM_NAMES.get(str(row.get("retro_code", "")), str(row.get("team_name", ""))),
         pred_wins=float(row.get("pred_wins", 0)),
         pred_losses=float(row.get("pred_losses", 0)),
         pred_win_pct=float(row.get("pred_win_pct", 0)),
@@ -88,8 +86,7 @@ class StandingsServicer(standings_pb2_grpc.StandingsServiceServicer):
             )
 
         season_started = (
-            not actual_df.empty
-            and actual_df["wins"].sum() + actual_df["losses"].sum() > 0
+            not actual_df.empty and actual_df["wins"].sum() + actual_df["losses"].sum() > 0
         )
 
         if not pred_df.empty and season_started:
@@ -174,9 +171,7 @@ class StandingsServicer(standings_pb2_grpc.StandingsServiceServicer):
                 async with MLBAPIClient() as client:
                     standings = await fetch_standings(client, season=season)
                     if standings.empty:
-                        return standings_pb2.TeamStatsResponse(
-                            season=season, teams=[]
-                        )
+                        return standings_pb2.TeamStatsResponse(season=season, teams=[])
                     total_games = standings["wins"].sum() + standings["losses"].sum()
                     if total_games == 0:
                         return standings_pb2.TeamStatsResponse(
@@ -195,9 +190,7 @@ class StandingsServicer(standings_pb2_grpc.StandingsServiceServicer):
                 season,
                 exc,
             )
-            return standings_pb2.TeamStatsResponse(
-                season=season, teams=[], error=str(exc)
-            )
+            return standings_pb2.TeamStatsResponse(season=season, teams=[], error=str(exc))
 
         teams: list[standings_pb2.TeamStatsEntry] = []
         for _, row in full.iterrows():

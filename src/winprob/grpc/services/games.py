@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import grpc
 import pandas as pd
@@ -109,10 +109,7 @@ class GameServicer(games_pb2_grpc.GameServiceServicer):
                     coef = lr.coef_[0]
                     z = (x - scaler.mean_) / scaler.scale_
                     shap_arr = coef * z
-                    shap_vals = {
-                        f: round(float(v), 5)
-                        for f, v in zip(feature_cols, shap_arr)
-                    }
+                    shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, shap_arr)}
                 elif hasattr(base, "booster_") or hasattr(base, "get_booster"):
                     import shap
 
@@ -120,10 +117,7 @@ class GameServicer(games_pb2_grpc.GameServiceServicer):
                     explainer = shap.TreeExplainer(base)
                     sv = explainer.shap_values(X_df)
                     arr = sv[1][0] if isinstance(sv, list) else sv[0]
-                    shap_vals = {
-                        f: round(float(v), 5)
-                        for f, v in zip(feature_cols, arr)
-                    }
+                    shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, arr)}
             except Exception as exc:
                 logger.warning(
                     "SHAP attribution failed for game_pk=%d: %s",
@@ -133,7 +127,7 @@ class GameServicer(games_pb2_grpc.GameServiceServicer):
 
         top_factors = sorted(
             [{"feature": k, "value": v} for k, v in shap_vals.items()],
-            key=lambda x: abs(x["value"]),
+            key=lambda x: abs(cast(float, x["value"])),
             reverse=True,
         )[:12]
 
@@ -153,8 +147,7 @@ class GameServicer(games_pb2_grpc.GameServiceServicer):
             away_name=TEAM_NAMES.get(str(row.get("away_retro", "")), ""),
             stats=stats,
             top_factors=[
-                common_pb2.Factor(feature=f["feature"], value=f["value"])
-                for f in top_factors
+                common_pb2.Factor(feature=f["feature"], value=f["value"]) for f in top_factors
             ],
         )
         if pd.notna(row.get("prob")):
@@ -181,38 +174,24 @@ class GameServicer(games_pb2_grpc.GameServiceServicer):
                 df = df[df["home_retro"] == request.home.upper()]
             if request.HasField("away"):
                 df = df[df["away_retro"] == request.away.upper()]
-            has_result = df[
-                df["home_win"].notna() & df["prob"].notna()
-            ].copy()
+            has_result = df[df["home_win"].notna() & df["prob"].notna()].copy()
             has_result["fav_home"] = has_result["prob"] >= 0.5
             has_result["fav_prob"] = has_result["prob"].clip(lower=0.5)
             has_result.loc[~has_result["fav_home"], "fav_prob"] = (
                 1 - has_result.loc[~has_result["fav_home"], "prob"]
             )
-            has_result = has_result[
-                has_result["fav_prob"] >= (request.min_prob or 0.65)
-            ]
-            has_result["upset"] = (
-                (has_result["fav_home"] & (has_result["home_win"] == 0))
-                | (
-                    ~has_result["fav_home"]
-                    & (has_result["home_win"] == 1)
-                )
+            has_result = has_result[has_result["fav_prob"] >= (request.min_prob or 0.65)]
+            has_result["upset"] = (has_result["fav_home"] & (has_result["home_win"] == 0)) | (
+                ~has_result["fav_home"] & (has_result["home_win"] == 1)
             )
-            upsets = has_result[has_result["upset"]].nlargest(
-                request.limit or 20, "fav_prob"
-            )
+            upsets = has_result[has_result["upset"]].nlargest(request.limit or 20, "fav_prob")
             entries = [
                 games_pb2.UpsetEntry(
                     game_pk=int(r.get("game_pk", 0) or 0),
                     date=str(r.get("date", ""))[:10],
                     season=int(r.get("season", 0) or 0),
-                    home_name=TEAM_NAMES.get(
-                        str(r.get("home_retro", "")), ""
-                    ),
-                    away_name=TEAM_NAMES.get(
-                        str(r.get("away_retro", "")), ""
-                    ),
+                    home_name=TEAM_NAMES.get(str(r.get("home_retro", "")), ""),
+                    away_name=TEAM_NAMES.get(str(r.get("away_retro", "")), ""),
                     prob_home=round(float(r["prob"]), 4),
                     fav_prob=round(float(r["fav_prob"]), 4),
                     fav_team="home" if r["fav_home"] else "away",

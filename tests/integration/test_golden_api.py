@@ -35,7 +35,7 @@ GOLDEN_ENDPOINTS = [
 
 def _normalize_for_compare(golden: dict | list, actual: dict | list) -> bool:
     """Return True if actual matches golden, with allowed variance for variable fields."""
-    if type(golden) != type(actual):
+    if type(golden) is not type(actual):
         return False
     if isinstance(golden, list):
         if len(golden) != len(actual):
@@ -66,6 +66,7 @@ def _normalize_for_compare(golden: dict | list, actual: dict | list) -> bool:
 def api_client() -> TestClient:
     """TestClient for the FastAPI app (current or gateway)."""
     from winprob.app.main import app
+
     return TestClient(app)
 
 
@@ -122,6 +123,8 @@ def test_game_detail_matches_golden_if_present(api_client: TestClient) -> None:
         if r.status_code != 200:
             pytest.skip(f"game_pk {game_pk} not available (status {r.status_code})")
         actual = r.json()
-        assert _normalize_for_compare(golden_data, actual), f"game detail {game_pk} does not match golden"
+        assert _normalize_for_compare(golden_data, actual), (
+            f"game detail {game_pk} does not match golden"
+        )
         return  # one is enough
     pytest.skip("No api_game_detail_<pk>.json golden file (except placeholder)")

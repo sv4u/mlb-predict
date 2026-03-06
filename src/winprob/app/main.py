@@ -372,9 +372,7 @@ async def api_game_detail(request: Request, game_pk: int) -> dict | JSONResponse
         try:
             from winprob.grpc.generated.winprob.v1 import games_pb2
 
-            r = await stubs["games"].GetGameDetail(
-                games_pb2.GetGameDetailRequest(game_pk=game_pk)
-            )
+            r = await stubs["games"].GetGameDetail(games_pb2.GetGameDetailRequest(game_pk=game_pk))
             return _grpc_dict(r)
         except grpc.RpcError as e:
             return _grpc_error_to_response(e)
@@ -642,7 +640,7 @@ async def api_standings(
 async def api_team_stats(
     request: Request,
     season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
-) -> dict:
+) -> dict | JSONResponse:
     """Return batting and pitching stats for all teams in a season."""
     stubs = _stubs(request)
     if stubs:

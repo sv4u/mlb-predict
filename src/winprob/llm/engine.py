@@ -217,4 +217,6 @@ class ChatEngine:
                 tool_calls_this_turn,
                 tool_results,
             )
-            payload_messages = [{"role": "system", "content": system}] + self._get_or_create_messages(session_id)
+            payload_messages = [
+                {"role": "system", "content": system}
+            ] + self._get_or_create_messages(session_id)

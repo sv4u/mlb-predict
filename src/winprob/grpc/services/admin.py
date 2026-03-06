@@ -102,9 +102,7 @@ class AdminServicer(admin_pb2_grpc.AdminServiceServicer):
             await asyncio.sleep(0.05)
             state = get_state(kind)
             for i in range(last_sent, len(state.log_lines)):
-                yield admin_pb2.PipelineProgress(
-                    log_line=state.log_lines[i]
-                )
+                yield admin_pb2.PipelineProgress(log_line=state.log_lines[i])
             last_sent = len(state.log_lines)
             if task.done():
                 try:
@@ -112,7 +110,5 @@ class AdminServicer(admin_pb2_grpc.AdminServiceServicer):
                 except Exception:
                     pass
                 state = get_state(kind)
-                yield admin_pb2.PipelineProgress(
-                    final_state=_state_to_proto(state)
-                )
+                yield admin_pb2.PipelineProgress(final_state=_state_to_proto(state))
                 return

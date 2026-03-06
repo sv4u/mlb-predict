@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 
@@ -196,10 +197,12 @@ TOOL_SCHEMAS: list[dict] = [
 def _safe_float(v: object) -> float | None:
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return None
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
+    if isinstance(v, (int, float, str)):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def _tool_query_predictions(team: str | None, season: int | None, date: str | None) -> str:
@@ -263,7 +266,7 @@ def _tool_explain_prediction(game_pk: int) -> str:
             {"feature": k, "value": v, "label": get_feature_description(k)}
             for k, v in shap_vals.items()
         ],
-        key=lambda x: abs(x["value"]),
+        key=lambda x: abs(cast(float, x["value"])),
         reverse=True,
     )[:10]
     out = {

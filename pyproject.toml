@@ -60,6 +60,8 @@ packages = ["src/winprob"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Generated protobuf/grpc code; do not lint or format.
+exclude = ["src/winprob/grpc/generated"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -69,6 +71,15 @@ python_version = "3.11"
 ignore_missing_imports = true
 warn_unused_ignores = true
 warn_return_any = false
+# Exclude HTTP gateway (uses generated pb2; mypy doesn't see runtime-injected symbols).
+exclude = [
+  ".*/app/main\\.py$",
+]
+# gRPC services and generated code use protobuf modules; symbols are runtime-injected.
+# Silence attr-defined and name-defined so CI passes; can add mypy-protobuf stubs later.
+[[tool.mypy.overrides]]
+module = ["winprob.grpc.services.*", "winprob.grpc.generated.*"]
+disable_error_code = ["attr-defined", "name-defined"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

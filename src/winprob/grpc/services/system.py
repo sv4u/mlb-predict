@@ -63,7 +63,5 @@ class SystemServicer(system_pb2_grpc.SystemServiceServicer):
             key=lambda x: x["name"],
         )
         return system_pb2.TeamsResponse(
-            teams=[
-                common_pb2.Team(code=t["code"], name=t["name"]) for t in teams
-            ]
+            teams=[common_pb2.Team(code=t["code"], name=t["name"]) for t in teams]
         )

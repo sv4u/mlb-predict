@@ -20,7 +20,9 @@ _DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=300, connect=10)
 async def _ollama_available(session: aiohttp.ClientSession) -> bool:
     """Return True if Ollama is reachable (e.g. GET /api/tags succeeds)."""
     try:
-        async with session.get(f"{OLLAMA_HOST}/api/tags", timeout=5) as r:
+        async with session.get(
+            f"{OLLAMA_HOST}/api/tags", timeout=aiohttp.ClientTimeout(total=5)
+        ) as r:
             return r.status == 200
     except Exception:
         return False
@@ -92,7 +94,11 @@ class OllamaAdapterServicer(chat_pb2_grpc.OllamaServiceServicer):
                                 obj = json.loads(line.decode("utf-8"))
                             except (json.JSONDecodeError, UnicodeDecodeError):
                                 continue
-                            msg = obj.get("message", {}) if isinstance(obj.get("message"), dict) else {}
+                            msg = (
+                                obj.get("message", {})
+                                if isinstance(obj.get("message"), dict)
+                                else {}
+                            )
                             chunk_text = msg.get("content") or obj.get("response") or ""
                             done = obj.get("done", False)
                             tool_calls = None

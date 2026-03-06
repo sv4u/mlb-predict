@@ -31,27 +31,13 @@ _server: grpc.aio.Server | None = None
 
 def _add_servicers(server: grpc.aio.Server) -> None:
     """Register all gRPC servicers. Called before server.start()."""
-    system_pb2_grpc.add_SystemServiceServicer_to_server(
-        SystemServicer(), server
-    )
-    games_pb2_grpc.add_GameServiceServicer_to_server(
-        GameServicer(), server
-    )
-    models_pb2_grpc.add_ModelServiceServicer_to_server(
-        ModelServicer(), server
-    )
-    standings_pb2_grpc.add_StandingsServiceServicer_to_server(
-        StandingsServicer(), server
-    )
-    admin_pb2_grpc.add_AdminServiceServicer_to_server(
-        AdminServicer(), server
-    )
-    chat_pb2_grpc.add_ChatServiceServicer_to_server(
-        ChatServicer(), server
-    )
-    chat_pb2_grpc.add_OllamaServiceServicer_to_server(
-        OllamaAdapterServicer(), server
-    )
+    system_pb2_grpc.add_SystemServiceServicer_to_server(SystemServicer(), server)
+    games_pb2_grpc.add_GameServiceServicer_to_server(GameServicer(), server)
+    models_pb2_grpc.add_ModelServiceServicer_to_server(ModelServicer(), server)
+    standings_pb2_grpc.add_StandingsServiceServicer_to_server(StandingsServicer(), server)
+    admin_pb2_grpc.add_AdminServiceServicer_to_server(AdminServicer(), server)
+    chat_pb2_grpc.add_ChatServiceServicer_to_server(ChatServicer(), server)
+    chat_pb2_grpc.add_OllamaServiceServicer_to_server(OllamaAdapterServicer(), server)
 
 
 async def start_grpc_server() -> grpc.aio.Server | None:
