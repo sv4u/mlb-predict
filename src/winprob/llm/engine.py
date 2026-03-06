@@ -153,7 +153,9 @@ class ChatEngine:
                     ) as resp:
                         if resp.status != 200:
                             text = await resp.text()
-                            logger.warning("Ollama non-200: status=%s body=%s", resp.status, text[:200])
+                            logger.warning(
+                                "Ollama non-200: status=%s body=%s", resp.status, text[:200]
+                            )
                             yield f"Ollama error {resp.status}: {text[:200]}"
                             return
 
@@ -195,7 +197,10 @@ class ChatEngine:
 
             round_count += 1
             if round_count > _MAX_TOOL_ROUNDS:
-                logger.info("Tool-call loop hit max rounds (%d); returning accumulated text", _MAX_TOOL_ROUNDS)
+                logger.info(
+                    "Tool-call loop hit max rounds (%d); returning accumulated text",
+                    _MAX_TOOL_ROUNDS,
+                )
                 self.append_assistant_only(session_id, accumulated)
                 return
 
@@ -232,5 +237,9 @@ class ChatEngine:
             payload_messages = [
                 {"role": "system", "content": system}
             ] + self._get_or_create_messages(session_id)
-            logger.info("Retrying Ollama with tool results (round %d/%d, %d messages)",
-                        round_count, _MAX_TOOL_ROUNDS, len(payload_messages))
+            logger.info(
+                "Retrying Ollama with tool results (round %d/%d, %d messages)",
+                round_count,
+                _MAX_TOOL_ROUNDS,
+                len(payload_messages),
+            )

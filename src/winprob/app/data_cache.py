@@ -8,6 +8,7 @@ hot reloads.  Supports runtime model switching via ``switch_model()``.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import threading
 import time
@@ -34,10 +35,15 @@ _app_ready: bool = False
 
 
 def _resolve_git_commit() -> str:
-    """Read the current HEAD commit hash (short) from git or a baked-in file."""
+    """Read the current HEAD commit hash (short) from env, baked-in file, or git."""
+    env_val = os.environ.get("GIT_COMMIT", "").strip()
+    if env_val and env_val != "unknown":
+        return env_val[:12]
     stamp_file = _REPO_ROOT / "GIT_COMMIT"
     if stamp_file.exists():
-        return stamp_file.read_text().strip()[:12]
+        file_val = stamp_file.read_text().strip()[:12]
+        if file_val and file_val != "unknown":
+            return file_val
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short=8", "HEAD"],

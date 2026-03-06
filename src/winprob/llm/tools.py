@@ -443,9 +443,7 @@ def _tool_get_live_odds() -> str:
     events = client.get_game_odds_sync()
     client.events_to_retro(events)
     if not events:
-        return json.dumps(
-            {"message": "No upcoming games with odds right now.", "events": []}
-        )
+        return json.dumps({"message": "No upcoming games with odds right now.", "events": []})
     out = []
     for ev in events[:20]:
         home = ev.get("home_team") or ""
@@ -458,8 +456,12 @@ def _tool_get_live_odds() -> str:
                 if m.get("key") != "h2h":
                     continue
                 for o in m.get("outcomes") or []:
-                    h2h.append({"book": b.get("key"), "team": o.get("name"), "price": o.get("price")})
-        out.append({"home_team": home, "away_team": away, "commence_time": commence, "moneyline": h2h[:4]})
+                    h2h.append(
+                        {"book": b.get("key"), "team": o.get("name"), "price": o.get("price")}
+                    )
+        out.append(
+            {"home_team": home, "away_team": away, "commence_time": commence, "moneyline": h2h[:4]}
+        )
     return json.dumps({"events": out, "count": len(events)})
 
 

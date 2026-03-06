@@ -57,7 +57,9 @@ _GRPC_ENABLED = os.environ.get("WINPROB_GRPC_ENABLED", "1").strip() == "1"
 _GRPC_PORT = int(os.environ.get("GRPC_PORT", "50051"))
 
 
-_MTD_USE_NEW_KW = "always_print_fields_with_no_presence" in inspect.signature(MessageToDict).parameters
+_MTD_USE_NEW_KW = (
+    "always_print_fields_with_no_presence" in inspect.signature(MessageToDict).parameters
+)
 
 
 def _grpc_dict(msg) -> dict:

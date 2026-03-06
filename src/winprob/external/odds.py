@@ -152,9 +152,7 @@ class OddsClient:
                                     )
                                     return None
                                 if n < _QUOTA_WARN:
-                                    logger.warning(
-                                        "Odds API quota below 100 (remaining=%s)", n
-                                    )
+                                    logger.warning("Odds API quota below 100 (remaining=%s)", n)
                             except ValueError:
                                 pass
 
@@ -180,9 +178,7 @@ class OddsClient:
                                 self._backoff_max,
                                 self._backoff_base * (2 ** (attempt - 1)),
                             )
-                            logger.warning(
-                                "Odds API %s; retry in %.1fs", resp.status, wait
-                            )
+                            logger.warning("Odds API %s; retry in %.1fs", resp.status, wait)
                             await asyncio.sleep(wait)
                             last_err = OddsAPIError(f"{resp.status} server error")
                             continue

@@ -65,6 +65,7 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
     environment:
+      GIT_COMMIT: "${GIT_COMMIT:-unknown}"
       MODEL: "${MODEL:-stacked}"
       PORT: "30087"
       OLLAMA_HOST: "http://ollama:11434"

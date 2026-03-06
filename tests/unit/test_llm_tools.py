@@ -72,11 +72,12 @@ def test_run_tool_find_ev_bets_stub() -> None:
 
 
 def test_run_tool_get_live_odds_stub() -> None:
-    """get_live_odds returns stub message."""
+    """get_live_odds returns stub or not-configured message when no API key is set."""
     out = run_tool("get_live_odds", {})
     data = json.loads(out)
     assert "message" in data
-    assert "not available" in data["message"].lower() or "future" in data["message"].lower()
+    msg = data["message"].lower()
+    assert "not available" in msg or "future" in msg or "not configured" in msg
 
 
 def test_run_tool_compare_models_returns_list() -> None:

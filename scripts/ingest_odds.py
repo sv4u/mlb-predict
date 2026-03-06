@@ -23,11 +23,11 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from winprob.external.odds import OddsClient
-from winprob.external.odds_config import get_odds_api_key
-
 
 async def _run(refresh: bool) -> int:
+    from winprob.external.odds import OddsClient
+    from winprob.external.odds_config import get_odds_api_key
+
     if not get_odds_api_key():
         print(
             "Live Odds API key is not configured. Set ODDS_API_KEY or add the key "
@@ -55,9 +55,7 @@ async def _run(refresh: bool) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Ingest MLB game odds from The Odds API"
-    )
+    parser = argparse.ArgumentParser(description="Ingest MLB game odds from The Odds API")
     parser.add_argument(
         "--refresh",
         action="store_true",
