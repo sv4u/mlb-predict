@@ -17,6 +17,8 @@ from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import inspect
+
 from google.protobuf.json_format import MessageToDict
 from pydantic import BaseModel
 
@@ -55,13 +57,17 @@ _GRPC_ENABLED = os.environ.get("WINPROB_GRPC_ENABLED", "1").strip() == "1"
 _GRPC_PORT = int(os.environ.get("GRPC_PORT", "50051"))
 
 
+_MTD_USE_NEW_KW = "always_print_fields_with_no_presence" in inspect.signature(MessageToDict).parameters
+
+
 def _grpc_dict(msg) -> dict:
     """Convert protobuf to JSON-serializable dict (snake_case, include defaults)."""
-    return MessageToDict(
-        msg,
-        preserving_proto_field_name=True,
-        including_default_value_fields=True,
+    defaults_kw = (
+        {"always_print_fields_with_no_presence": True}
+        if _MTD_USE_NEW_KW
+        else {"including_default_value_fields": True}
     )
+    return MessageToDict(msg, preserving_proto_field_name=True, **defaults_kw)
 
 
 @asynccontextmanager
@@ -387,27 +393,29 @@ async def api_game_detail(request: Request, game_pk: int) -> dict | JSONResponse
     row = matches.iloc[0]
     model, meta, feature_cols = get_model()
 
-    # SHAP attribution
     shap_vals: dict[str, float] = {}
     with timed_operation("shap_attribution"):
         try:
-            base = getattr(model, "base", model)
+            from winprob.grpc.services.games import _extract_tree_model
+
             x = row[feature_cols].values.astype(float)
-            if hasattr(base, "named_steps"):  # logistic
+            tree_model = _extract_tree_model(model)
+            base = getattr(model, "base", model)
+            if tree_model is not None:
+                import shap
+
+                X_df = pd.DataFrame([x], columns=feature_cols)
+                explainer = shap.TreeExplainer(tree_model)
+                sv = explainer.shap_values(X_df)
+                arr = sv[1][0] if isinstance(sv, list) else sv[0]
+                shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, arr)}
+            elif hasattr(base, "named_steps"):
                 scaler = base.named_steps["scaler"]
                 lr = base.named_steps["lr"]
                 coef = lr.coef_[0]
                 z = (x - scaler.mean_) / scaler.scale_
                 shap_arr = coef * z
                 shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, shap_arr)}
-            elif hasattr(base, "booster_") or hasattr(base, "get_booster"):
-                import shap
-
-                X_df = pd.DataFrame([x], columns=feature_cols)
-                explainer = shap.TreeExplainer(base)
-                sv = explainer.shap_values(X_df)
-                arr = sv[1][0] if isinstance(sv, list) else sv[0]
-                shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, arr)}
         except Exception as exc:
             logger.warning("SHAP attribution failed for game_pk=%d: %s", game_pk, exc)
 

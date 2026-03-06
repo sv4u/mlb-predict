@@ -15,7 +15,7 @@ from winprob.grpc.generated.winprob.v1 import common_pb2, models_pb2, models_pb2
 logger = logging.getLogger(__name__)
 
 _VALID_MODEL_TYPES = ("logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked")
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 _CV_PATHS = [
     _REPO_ROOT / "data" / "models" / "cv_summary_v3.json",
     _REPO_ROOT / "data" / "models" / "cv_summary_v2.json",

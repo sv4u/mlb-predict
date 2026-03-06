@@ -14,6 +14,28 @@ from winprob.grpc.generated.winprob.v1 import common_pb2, games_pb2, games_pb2_g
 
 logger = logging.getLogger(__name__)
 
+_TREE_MODEL_PREFERENCE = ["lightgbm", "xgboost", "catboost"]
+
+
+def _extract_tree_model(model: Any) -> Any | None:
+    """Extract a raw tree model suitable for TreeSHAP.
+
+    Works for bare tree models, calibrated wrappers, and StackedEnsemble
+    (picks the best available tree-based base model).
+    """
+    raw = getattr(model, "base", model)
+    if hasattr(raw, "booster_") or hasattr(raw, "get_booster"):
+        return raw
+    if hasattr(model, "base_models") and hasattr(model, "base_keys"):
+        for key in _TREE_MODEL_PREFERENCE:
+            cal = model.base_models.get(key)
+            if cal is None:
+                continue
+            inner = getattr(cal, "base", None)
+            if inner is not None and (hasattr(inner, "booster_") or hasattr(inner, "get_booster")):
+                return inner
+    return None
+
 
 def _row_to_game(r: Any) -> common_pb2.Game:
     """Build a Game protobuf from a feature row."""
@@ -101,23 +123,24 @@ class GameServicer(games_pb2_grpc.GameServiceServicer):
         shap_vals: dict[str, float] = {}
         with timed_operation("shap_attribution"):
             try:
-                base = getattr(model, "base", model)
                 x = row[feature_cols].values.astype(float)
-                if hasattr(base, "named_steps"):  # logistic
+                tree_model = _extract_tree_model(model)
+                base = getattr(model, "base", model)
+                if tree_model is not None:
+                    import shap
+
+                    X_df = pd.DataFrame([x], columns=feature_cols)
+                    explainer = shap.TreeExplainer(tree_model)
+                    sv = explainer.shap_values(X_df)
+                    arr = sv[1][0] if isinstance(sv, list) else sv[0]
+                    shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, arr)}
+                elif hasattr(base, "named_steps"):
                     scaler = base.named_steps["scaler"]
                     lr = base.named_steps["lr"]
                     coef = lr.coef_[0]
                     z = (x - scaler.mean_) / scaler.scale_
                     shap_arr = coef * z
                     shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, shap_arr)}
-                elif hasattr(base, "booster_") or hasattr(base, "get_booster"):
-                    import shap
-
-                    X_df = pd.DataFrame([x], columns=feature_cols)
-                    explainer = shap.TreeExplainer(base)
-                    sv = explainer.shap_values(X_df)
-                    arr = sv[1][0] if isinstance(sv, list) else sv[0]
-                    shap_vals = {f: round(float(v), 5) for f, v in zip(feature_cols, arr)}
             except Exception as exc:
                 logger.warning(
                     "SHAP attribution failed for game_pk=%d: %s",

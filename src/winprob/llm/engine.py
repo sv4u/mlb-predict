@@ -153,6 +153,7 @@ class ChatEngine:
                     ) as resp:
                         if resp.status != 200:
                             text = await resp.text()
+                            logger.warning("Ollama non-200: status=%s body=%s", resp.status, text[:200])
                             yield f"Ollama error {resp.status}: {text[:200]}"
                             return
 
@@ -176,8 +177,7 @@ class ChatEngine:
                                 if content_delta:
                                     accumulated += content_delta
                                     yield content_delta
-                                done = obj.get("done", False)
-                                if done and msg.get("tool_calls"):
+                                if msg.get("tool_calls"):
                                     tool_calls_this_turn = msg["tool_calls"]
 
             except aiohttp.ClientError as e:
@@ -195,6 +195,7 @@ class ChatEngine:
 
             round_count += 1
             if round_count > _MAX_TOOL_ROUNDS:
+                logger.info("Tool-call loop hit max rounds (%d); returning accumulated text", _MAX_TOOL_ROUNDS)
                 self.append_assistant_only(session_id, accumulated)
                 return
 
@@ -203,13 +204,24 @@ class ChatEngine:
                 tc_id = tc.get("id") or ""
                 fn = tc.get("function", {})
                 name = fn.get("name", "")
-                args_str = fn.get("arguments", "{}")
-                try:
-                    args = json.loads(args_str) if args_str else {}
-                except json.JSONDecodeError:
+                args_raw = fn.get("arguments", {})
+                if isinstance(args_raw, dict):
+                    args = args_raw
+                elif isinstance(args_raw, str):
+                    try:
+                        args = json.loads(args_raw)
+                    except (json.JSONDecodeError, ValueError):
+                        args = {}
+                else:
                     args = {}
-                result = run_tool(name, args)
+                logger.info("Tool call: %s(%s)", name, json.dumps(args)[:200])
+                try:
+                    result = run_tool(name, args)
+                except Exception as e:
+                    logger.exception("Tool %s raised an exception", name)
+                    result = json.dumps({"error": str(e)})
                 tool_results.append((tc_id, result))
+                logger.info("Tool result for %s: %s", name, result[:200])
 
             self.append_assistant_and_tool(
                 session_id,
@@ -220,3 +232,5 @@ class ChatEngine:
             payload_messages = [
                 {"role": "system", "content": system}
             ] + self._get_or_create_messages(session_id)
+            logger.info("Retrying Ollama with tool results (round %d/%d, %d messages)",
+                        round_count, _MAX_TOOL_ROUNDS, len(payload_messages))

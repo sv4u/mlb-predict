@@ -18,9 +18,36 @@
 # ./logs  is mounted at /app/logs   inside the container.
 # Both directories are created automatically by Docker Compose on first run.
 # Deleting ./data/models/ forces a full re-ingest and re-train on next start.
+#
+# Chat / LLM
+# -----------
+# The chat feature requires the Ollama service below.  On first start, pull
+# the default model:
+#   docker exec mlb-ollama ollama pull qwen2.5:7b
+# The model is persisted in the ollama_data volume across restarts.
 # =============================================================================
 
 services:
+  # ---------------------------------------------------------------------------
+  # Ollama — local LLM backend for the chat feature
+  # ---------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: mlb-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    mem_limit: 6g
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Win Probability dashboard
+  # ---------------------------------------------------------------------------
   winprob:
     build:
       context: .
@@ -29,24 +56,27 @@ services:
         GIT_COMMIT: "${GIT_COMMIT:-unknown}"
     image: mlb-winprob:latest
     container_name: mlb-winprob
+    depends_on:
+      ollama:
+        condition: service_healthy
     ports:
-      - "${PORT:-8087}:8087"
+      - "${PORT:-30087}:30087"
     volumes:
-      # Bind-mount host directories so data and models persist across container
-      # restarts and are accessible directly on the host machine.
       - ./data:/app/data
       - ./logs:/app/logs
     environment:
       MODEL: "${MODEL:-stacked}"
-      PORT: "8087"
+      PORT: "30087"
+      OLLAMA_HOST: "http://ollama:11434"
+      OLLAMA_CHAT_MODEL: "qwen2.5:7b"
     restart: no
-    mem_limit: 8g
+    mem_limit: 2g
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8087/api/seasons"]
+      test: ["CMD", "curl", "-f", "http://localhost:30087/api/seasons"]
       interval: 30s
       timeout: 10s
       retries: 5
-      # Give the container time to complete the initial bootstrap before the
-      # health check starts firing.  On a machine with an already-populated
-      # data volume this takes ~30 s; on a cold first run it can take hours.
       start_period: 600s
+
+volumes:
+  ollama_data:

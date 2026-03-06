@@ -102,7 +102,7 @@ class OllamaAdapterServicer(chat_pb2_grpc.OllamaServiceServicer):
                             chunk_text = msg.get("content") or obj.get("response") or ""
                             done = obj.get("done", False)
                             tool_calls = None
-                            if done and msg and "tool_calls" in msg and msg["tool_calls"]:
+                            if msg and "tool_calls" in msg and msg["tool_calls"]:
                                 tool_calls = json.dumps(msg["tool_calls"])
                             out = chat_pb2.OllamaChatResponse(
                                 content=chunk_text,
