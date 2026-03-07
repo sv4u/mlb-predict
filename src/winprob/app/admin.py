@@ -1,14 +1,18 @@
 """Admin pipeline runner — async background task management for ingest and retrain.
 
 Tracks pipeline state, captures log output, and triggers model reload on success.
+Also provides WebSocket-based shell and Python REPL sessions.
 """
 
 from __future__ import annotations
 
 import asyncio
+import code
+import io
 import json
 import logging
 import time
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -28,6 +32,16 @@ class PipelineKind(str, Enum):
     INGEST = "ingest"
     UPDATE = "update"
     RETRAIN = "retrain"
+
+
+@dataclass
+class PipelineOptions:
+    """User-configurable options for pipeline runs."""
+
+    include_preseason: bool = False
+    seasons: list[int] | None = None
+    refresh_mlbapi: bool = True
+    refresh_retro: bool = True
 
 
 class PipelineStatus(str, Enum):
@@ -153,69 +167,104 @@ def _python_bin() -> str:
     return shutil.which("python") or "python"
 
 
-def _ingest_commands() -> list[tuple[str, str]]:
+def _ingest_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str]]:
     """Full re-ingestion of all seasons (2000–current year)."""
     from datetime import datetime as dt
 
+    opts = opts or PipelineOptions()
     python = _python_bin()
     year = dt.now(timezone.utc).year
-    seasons = " ".join(str(s) for s in range(2000, year + 1))
+
+    if opts.seasons:
+        seasons = " ".join(str(s) for s in opts.seasons)
+        season_label = ", ".join(str(s) for s in opts.seasons)
+    else:
+        seasons = " ".join(str(s) for s in range(2000, year + 1))
+        season_label = f"2000–{year}"
+
+    refresh_flags = ""
+    if opts.refresh_mlbapi:
+        refresh_flags += " --refresh-mlbapi"
+    if opts.refresh_retro:
+        refresh_flags += " --refresh-retro"
+
+    preseason_flag = " --include-preseason" if opts.include_preseason else ""
 
     return [
         (
-            f"Ingest schedules & gamelogs (2000–{year})",
-            f"{python} scripts/ingest_all.py --seasons {seasons} --refresh-mlbapi --refresh-retro",
+            f"Ingest schedules & gamelogs ({season_label})",
+            f"{python} scripts/ingest_all.py --seasons {seasons}{refresh_flags}{preseason_flag}",
         ),
         (
-            f"Ingest pitcher stats (2000–{year})",
-            f"{python} scripts/ingest_pitcher_stats.py --seasons {seasons} --refresh",
+            f"Ingest pitcher stats ({season_label})",
+            f"{python} scripts/ingest_pitcher_stats.py --seasons {seasons}"
+            + (" --refresh" if opts.refresh_mlbapi else ""),
         ),
         (
-            f"Ingest FanGraphs metrics (2000–{year})",
+            f"Ingest FanGraphs metrics ({season_label})",
             f"{python} scripts/ingest_fangraphs.py --seasons {seasons}",
         ),
         (
-            f"Ingest weather data (2000–{year})",
+            f"Ingest weather data ({season_label})",
             f"{python} scripts/ingest_weather.py --seasons {seasons}",
         ),
         (
-            f"Build feature matrices (2000–{year})",
+            f"Build feature matrices ({season_label})",
             f"{python} scripts/build_features.py --seasons {seasons}",
         ),
         ("Build 2026 pre-season features (if needed)", f"{python} scripts/build_features_2026.py"),
     ]
 
 
-def _update_commands() -> list[tuple[str, str]]:
+def _update_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str]]:
     """Update current season only (non-destructive)."""
     from datetime import datetime as dt
 
+    opts = opts or PipelineOptions()
     python = _python_bin()
-    year = str(dt.now(timezone.utc).year)
+
+    if opts.seasons:
+        year = " ".join(str(s) for s in opts.seasons)
+        season_label = ", ".join(str(s) for s in opts.seasons)
+    else:
+        yr = str(dt.now(timezone.utc).year)
+        year = yr
+        season_label = yr
+
+    preseason_flag = " --include-preseason" if opts.include_preseason else ""
+    refresh_schedule = " --refresh-mlbapi" if opts.refresh_mlbapi else ""
+    refresh_retro = " --refresh" if opts.refresh_retro else ""
 
     return [
         (
-            "Refresh schedule (MLB Stats API)",
-            f"{python} scripts/ingest_schedule.py --seasons {year} --refresh-mlbapi",
+            f"Refresh schedule ({season_label})",
+            f"{python} scripts/ingest_schedule.py --seasons {year}{refresh_schedule}{preseason_flag}",
         ),
         (
-            "Refresh Retrosheet gamelogs",
-            f"{python} scripts/ingest_retrosheet_gamelogs.py --seasons {year} --refresh",
-        ),
-        ("Rebuild crosswalk", f"{python} scripts/build_crosswalk.py --seasons {year}"),
-        (
-            "Refresh pitcher stats",
-            f"{python} scripts/ingest_pitcher_stats.py --seasons {year} --refresh",
+            f"Refresh Retrosheet gamelogs ({season_label})",
+            f"{python} scripts/ingest_retrosheet_gamelogs.py --seasons {year}{refresh_retro}",
         ),
         (
-            "Refresh FanGraphs metrics",
+            f"Rebuild crosswalk ({season_label})",
+            f"{python} scripts/build_crosswalk.py --seasons {year}",
+        ),
+        (
+            f"Refresh pitcher stats ({season_label})",
+            f"{python} scripts/ingest_pitcher_stats.py --seasons {year}"
+            + (" --refresh" if opts.refresh_mlbapi else ""),
+        ),
+        (
+            f"Refresh FanGraphs metrics ({season_label})",
             f"{python} scripts/ingest_fangraphs.py --seasons {year}",
         ),
         (
-            "Refresh weather data",
+            f"Refresh weather data ({season_label})",
             f"{python} scripts/ingest_weather.py --seasons {year}",
         ),
-        ("Rebuild feature matrix", f"{python} scripts/build_features.py --seasons {year}"),
+        (
+            f"Rebuild feature matrix ({season_label})",
+            f"{python} scripts/build_features.py --seasons {year}",
+        ),
         ("Build 2026 pre-season features (if needed)", f"{python} scripts/build_features_2026.py"),
     ]
 
@@ -254,6 +303,7 @@ async def _stream_process(
 async def run_pipeline(
     kind: PipelineKind,
     on_success: Callable[[], Any] | None = None,
+    opts: PipelineOptions | None = None,
 ) -> None:
     """Execute a pipeline (ingest or retrain) as a background task.
 
@@ -278,9 +328,9 @@ async def run_pipeline(
             _clean_models(state)
 
         if kind == PipelineKind.INGEST:
-            commands = _ingest_commands()
+            commands = _ingest_commands(opts)
         elif kind == PipelineKind.UPDATE:
-            commands = _update_commands()
+            commands = _update_commands(opts)
         else:
             commands = _retrain_commands()
         for desc, cmd in commands:
@@ -417,3 +467,141 @@ def gather_model_status() -> dict[str, Any]:
         "total_artifacts": len(models_found),
         "cv_summary": cv_summary,
     }
+
+
+# ---------------------------------------------------------------------------
+# WebSocket shell runner
+# ---------------------------------------------------------------------------
+
+
+async def ws_shell_run(websocket: Any) -> None:
+    """Run shell commands received via WebSocket, streaming output back line-by-line.
+
+    Protocol (JSON messages):
+      Client -> Server: {"cmd": "python scripts/ingest_schedule.py --seasons 2026"}
+      Server -> Client: {"type": "stdout", "data": "...line..."}
+      Server -> Client: {"type": "exit", "code": 0}
+      Client -> Server: {"type": "kill"}   (sends SIGTERM to running process)
+    """
+    await websocket.accept()
+    proc: asyncio.subprocess.Process | None = None
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            msg = json.loads(raw)
+
+            if msg.get("type") == "kill" and proc is not None:
+                proc.terminate()
+                await websocket.send_text(json.dumps({"type": "stdout", "data": "[killed]\n"}))
+                continue
+
+            cmd = msg.get("cmd", "").strip()
+            if not cmd:
+                await websocket.send_text(
+                    json.dumps({"type": "exit", "code": -1, "error": "Empty command"})
+                )
+                continue
+
+            await websocket.send_text(json.dumps({"type": "stdout", "data": f"$ {cmd}\n"}))
+
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=str(_REPO_ROOT),
+            )
+            assert proc.stdout is not None
+            while True:
+                line = await proc.stdout.readline()
+                if not line:
+                    break
+                await websocket.send_text(
+                    json.dumps({"type": "stdout", "data": line.decode("utf-8", errors="replace")})
+                )
+            await proc.wait()
+            await websocket.send_text(json.dumps({"type": "exit", "code": proc.returncode or 0}))
+            proc = None
+    except Exception:
+        pass
+    finally:
+        if proc is not None:
+            proc.terminate()
+
+
+# ---------------------------------------------------------------------------
+# WebSocket Python REPL
+# ---------------------------------------------------------------------------
+
+
+class _ReplConsole(code.InteractiveConsole):
+    """InteractiveConsole subclass that captures output to a buffer."""
+
+    def __init__(self) -> None:
+        super().__init__(locals={"__name__": "__repl__", "__builtins__": __builtins__})
+        self._buf = io.StringIO()
+
+    def execute(self, source: str) -> tuple[str, bool]:
+        """Execute source code; return (output_text, more_input_needed)."""
+        self._buf = io.StringIO()
+        more = False
+        with redirect_stdout(self._buf), redirect_stderr(self._buf):
+            try:
+                more = self.push(source)
+            except SystemExit:
+                self._buf.write("[SystemExit caught — REPL remains alive]\n")
+        return self._buf.getvalue(), more
+
+
+_repl_sessions: dict[str, _ReplConsole] = {}
+
+
+def _get_repl(session_id: str = "default") -> _ReplConsole:
+    """Return (or create) a REPL console for the given session ID."""
+    if session_id not in _repl_sessions:
+        _repl_sessions[session_id] = _ReplConsole()
+    return _repl_sessions[session_id]
+
+
+async def ws_repl_run(websocket: Any) -> None:
+    """Interactive Python REPL over WebSocket.
+
+    Protocol (JSON messages):
+      Client -> Server: {"code": "import pandas as pd", "session": "default"}
+      Server -> Client: {"type": "output", "data": "...", "more": false, "session": "default"}
+      Client -> Server: {"type": "reset", "session": "default"}
+      Server -> Client: {"type": "output", "data": "[session reset]\\n", "more": false, ...}
+    """
+    await websocket.accept()
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            msg = json.loads(raw)
+            session_id = msg.get("session", "default")
+
+            if msg.get("type") == "reset":
+                _repl_sessions.pop(session_id, None)
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "output",
+                            "data": "[session reset]\n",
+                            "more": False,
+                            "session": session_id,
+                        }
+                    )
+                )
+                continue
+
+            source = msg.get("code", "")
+            console = _get_repl(session_id)
+
+            loop = asyncio.get_event_loop()
+            output, more = await loop.run_in_executor(None, console.execute, source)
+
+            await websocket.send_text(
+                json.dumps({"type": "output", "data": output, "more": more, "session": session_id})
+            )
+    except Exception:
+        pass

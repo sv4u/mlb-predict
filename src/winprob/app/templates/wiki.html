@@ -198,6 +198,13 @@
     </li>
     <li><a href="#predictions">Predictions &amp; Drift</a></li>
     <li><a href="#errors">Error Handling</a></li>
+    <li><a href="#admin-console">Admin Console</a>
+      <ul>
+        <li><a href="#admin-pipelines">Pipeline Controls</a></li>
+        <li><a href="#admin-shell">Shell Runner</a></li>
+        <li><a href="#admin-repl">Python REPL</a></li>
+      </ul>
+    </li>
     <li><a href="#architecture">Architecture</a></li>
   </ul>
 </aside>
@@ -1097,6 +1104,74 @@ Example (training for 2025 evaluation):
 
 
 <!-- ================================================================== -->
+<h2 id="admin-console">Admin Console</h2>
+
+<p>
+  The <a href="/dashboard">admin dashboard</a> provides fine-grained control over data
+  pipelines, a server-side shell runner, and an interactive Python REPL — all accessible
+  from the browser with no SSH required.
+</p>
+
+<h3 id="admin-pipelines">Pipeline Controls</h3>
+
+<p>
+  The three pipeline actions (<strong>Update Season</strong>, <strong>Full Reingest</strong>,
+  <strong>Retrain Models</strong>) now expose configurable options:
+</p>
+<ul>
+  <li><strong>Include pre-season</strong> — toggle to include spring training games (<code>--include-preseason</code>)
+  </li>
+  <li><strong>Refresh MLB API / Retrosheet</strong> — control whether to re-fetch from external sources or use cached
+    data</li>
+  <li><strong>Seasons</strong> — specify which seasons to target (e.g. <code>2025, 2026</code>) instead of the default
+    range</li>
+</ul>
+<p>
+  Options are sent as a JSON body to <code>POST /api/admin/update</code> and
+  <code>POST /api/admin/ingest</code>. The Retrain pipeline does not accept options as it
+  always retrains all models.
+</p>
+
+<h3 id="admin-shell">Shell Runner</h3>
+
+<p>
+  The shell runner connects via WebSocket (<code>WS /ws/admin/shell</code>) and executes
+  arbitrary shell commands on the server with real-time streaming output. Commands run from
+  the project root directory.
+</p>
+<ul>
+  <li>Type a command and press Enter (or click Run) to execute</li>
+  <li>Output streams line-by-line to the terminal pane</li>
+  <li>Use the <strong>Kill</strong> button to send SIGTERM to a running process</li>
+  <li>Arrow keys navigate command history</li>
+</ul>
+<div class="tip-box">
+  <strong>Example:</strong> Re-ingest 2026 with pre-season games directly from the shell:<br>
+  <code>python scripts/ingest_schedule.py --seasons 2026 --include-preseason --refresh-mlbapi</code>
+</div>
+
+<h3 id="admin-repl">Python REPL</h3>
+
+<p>
+  The Python REPL connects via WebSocket (<code>WS /ws/admin/repl</code>) and provides an
+  interactive Python console with persistent state. Variables, imports, and function
+  definitions persist across executions within a session.
+</p>
+<ul>
+  <li>Press Enter to execute; Shift+Enter for multi-line input</li>
+  <li>Arrow keys navigate input history</li>
+  <li><strong>Reset Session</strong> clears all state and starts fresh</li>
+  <li>The REPL runs in the server process — you have full access to installed packages and project modules</li>
+</ul>
+<div class="tip-box">
+  <strong>Example session:</strong><br>
+  <code>>>> import pandas as pd</code><br>
+  <code>>>> df = pd.read_parquet("data/processed/features/features_2026.parquet")</code><br>
+  <code>>>> df.shape</code><br>
+  <code>(2430, 106)</code>
+</div>
+
+<!-- ================================================================== -->
 <h2 id="architecture">System Architecture</h2>
 
 <div class="diagram"><span class="hl">External Data Sources</span>
@@ -1122,7 +1197,8 @@ Example (training for 2025 evaluation):
 
 <span class="hl2">Web Dashboard</span>
 FastAPI + Jinja2 templates ──▶ Game browser, 2026 season, standings, SHAP, wiki, admin, sitemap
-Admin pipeline controls ──▶ Update Season | Full Reingest | Retrain Models
+Admin pipeline controls ──▶ Update Season | Full Reingest | Retrain Models (with fine-grained options)
+Admin dev tools ──▶ Shell Runner (WS /ws/admin/shell) | Python REPL (WS /ws/admin/repl)
 Real-time API endpoints ──▶ /api/games, /api/upsets, /api/standings, /api/team-stats, /api/admin/*
 Live standings data ──▶ MLB Stats API (wins, losses, batting stats, pitching stats)</div>
 

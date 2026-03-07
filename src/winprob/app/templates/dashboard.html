@@ -17,6 +17,10 @@
     .pipeline-card .desc { font-size: 0.82rem; color: var(--muted); margin-bottom: 1rem; line-height: 1.5; }
     .pipeline-meta { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.75rem; }
     .pipeline-meta span { display: block; margin-bottom: 0.2rem; }
+    .pipeline-opts { margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; align-items: center; }
+    .pipeline-opts label { font-size: 0.78rem; color: var(--muted); display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+    .pipeline-opts input[type="checkbox"] { accent-color: var(--accent); }
+    .pipeline-opts input[type="text"] { background: var(--card); border: 1px solid var(--border); border-radius: 5px; color: var(--text); padding: 0.3rem 0.5rem; font-size: 0.78rem; width: 140px; }
     .btn-ingest { background: var(--orange); }
     .btn-update { background: var(--accent); }
     .btn-retrain { background: var(--accent2); }
@@ -33,6 +37,31 @@
     .model-switch-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
     .model-switch-row select { background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 0.5rem 0.75rem; font-size: 0.9rem; }
     .model-switch-status { font-size: 0.82rem; color: var(--muted); }
+
+    .terminal-section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; position: relative; overflow: hidden; }
+    .terminal-section::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+    .terminal-section.shell-section::before { background: #22c55e; }
+    .terminal-section.repl-section::before { background: #a855f7; }
+    .terminal-section h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; }
+    .terminal-output { background: #0a0c12; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.75rem; height: 320px; overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.75rem; line-height: 1.6; color: #d4d4d8; white-space: pre-wrap; word-break: break-all; }
+    .terminal-output .cmd-echo { color: #22c55e; }
+    .terminal-output .exit-ok { color: #22c55e; font-weight: 700; }
+    .terminal-output .exit-err { color: #ef4444; font-weight: 700; }
+    .terminal-output .repl-out { color: #d4d4d8; }
+    .terminal-output .repl-err { color: #ef4444; }
+    .terminal-input-row { display: flex; gap: 0.5rem; }
+    .terminal-input-row input, .terminal-input-row textarea { flex: 1; background: #0a0c12; border: 1px solid var(--border); border-radius: 6px; color: #d4d4d8; padding: 0.5rem 0.75rem; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.78rem; resize: none; }
+    .terminal-input-row input::placeholder, .terminal-input-row textarea::placeholder { color: #52525b; }
+    .terminal-toolbar { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .terminal-toolbar button { font-size: 0.72rem; padding: 0.3rem 0.75rem; }
+    .btn-shell { background: #22c55e; }
+    .btn-repl { background: #a855f7; }
+    .btn-kill { background: #ef4444; }
+    .btn-clear { background: var(--border); color: var(--text); }
+    .ws-status { font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 4px; }
+    .ws-connected { background: #16a34a22; color: #22c55e; }
+    .ws-disconnected { background: #ef444422; color: #ef4444; }
+    .repl-prompt { color: #a855f7; }
   </style>
 </head>
 <body>
@@ -114,10 +143,16 @@
       </h3>
       <p class="desc">
         Refresh the current season's schedule, gamelogs, crosswalk, and feature matrices.
-        Non-destructive — only overwrites the current year. Auto-reloads on completion.
+        Non-destructive — only overwrites the specified seasons. Auto-reloads on completion.
       </p>
+      <div class="pipeline-opts">
+        <label><input type="checkbox" id="update-preseason"> Include pre-season</label>
+        <label><input type="checkbox" id="update-refresh-mlbapi" checked> Refresh MLB API</label>
+        <label><input type="checkbox" id="update-refresh-retro" checked> Refresh Retrosheet</label>
+        <label>Seasons: <input type="text" id="update-seasons" placeholder="e.g. 2025, 2026"></label>
+      </div>
       <div class="pipeline-meta" id="update-meta"></div>
-      <button class="btn btn-update" id="btn-update" onclick="startPipeline('update')">Update Season</button>
+      <button class="btn btn-update" id="btn-update" onclick="startPipelineWithOpts('update')">Update Season</button>
       <div class="log-box" id="update-log"></div>
     </div>
 
@@ -130,9 +165,15 @@
         <strong style="color:var(--orange)">Destructive:</strong> clears all processed data
         and re-ingests every season (2000–present) from scratch. This is a heavy operation.
       </p>
+      <div class="pipeline-opts">
+        <label><input type="checkbox" id="ingest-preseason"> Include pre-season</label>
+        <label><input type="checkbox" id="ingest-refresh-mlbapi" checked> Refresh MLB API</label>
+        <label><input type="checkbox" id="ingest-refresh-retro" checked> Refresh Retrosheet</label>
+        <label>Seasons: <input type="text" id="ingest-seasons" placeholder="blank = all (2000–now)"></label>
+      </div>
       <div class="pipeline-meta" id="ingest-meta"></div>
       <button class="btn btn-ingest" id="btn-ingest"
-        onclick="startDestructive('ingest', 'This will DELETE all processed data and re-ingest every season from scratch. Continue?')">Full
+        onclick="startDestructiveWithOpts('ingest', 'This will DELETE all processed data and re-ingest from scratch. Continue?')">Full
         Reingest</button>
       <div class="log-box" id="ingest-log"></div>
     </div>
@@ -212,6 +253,51 @@
       </thead>
       <tbody id="cv-tbody"></tbody>
     </table>
+  </div>
+
+  <h2 class="section-title">Shell Runner</h2>
+  <div class="terminal-section shell-section">
+    <h3>
+      Shell
+      <span class="ws-status ws-disconnected" id="shell-ws-status">disconnected</span>
+    </h3>
+    <p class="desc" style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem;line-height:1.5">
+      Execute shell commands on the server with streaming output. Commands run from the project root.
+    </p>
+    <div class="terminal-output" id="shell-output"></div>
+    <div class="terminal-input-row">
+      <input type="text" id="shell-input"
+        placeholder="python scripts/ingest_schedule.py --seasons 2026 --include-preseason"
+        onkeydown="if(event.key==='Enter')shellSend()" />
+      <button class="btn btn-shell" onclick="shellSend()">Run</button>
+    </div>
+    <div class="terminal-toolbar">
+      <button class="btn btn-kill" id="btn-shell-kill" onclick="shellKill()" disabled>Kill</button>
+      <button class="btn btn-clear" onclick="shellClear()">Clear</button>
+      <button class="btn btn-clear" onclick="shellReconnect()">Reconnect</button>
+    </div>
+  </div>
+  
+  <h2 class="section-title">Python REPL</h2>
+  <div class="terminal-section repl-section">
+    <h3>
+      Python
+      <span class="ws-status ws-disconnected" id="repl-ws-status">disconnected</span>
+    </h3>
+    <p class="desc" style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem;line-height:1.5">
+      Interactive Python console with persistent state. Variables and imports persist across executions.
+      Use Shift+Enter for multi-line input.
+    </p>
+    <div class="terminal-output" id="repl-output"><span class="repl-prompt">>>> </span></div>
+    <div class="terminal-input-row">
+      <textarea id="repl-input" rows="2" placeholder="import pandas as pd" onkeydown="replKeyHandler(event)"></textarea>
+      <button class="btn btn-repl" onclick="replSend()">Exec</button>
+    </div>
+    <div class="terminal-toolbar">
+      <button class="btn btn-clear" onclick="replClear()">Clear Output</button>
+      <button class="btn btn-kill" onclick="replReset()">Reset Session</button>
+      <button class="btn btn-clear" onclick="replReconnect()">Reconnect</button>
+    </div>
   </div>
 
 </div>
@@ -392,13 +478,34 @@ function renderCV(rows) {
   `).join('');
 }
 
-async function startPipeline(kind) {
+  function gatherPipelineOpts(kind) {
+    const preEl = document.getElementById(kind + '-preseason');
+    const mlbEl = document.getElementById(kind + '-refresh-mlbapi');
+    const retroEl = document.getElementById(kind + '-refresh-retro');
+    const seasonsEl = document.getElementById(kind + '-seasons');
+    const body = {
+      include_preseason: preEl ? preEl.checked : false,
+      refresh_mlbapi: mlbEl ? mlbEl.checked : true,
+      refresh_retro: retroEl ? retroEl.checked : true,
+    };
+    if (seasonsEl && seasonsEl.value.trim()) {
+      body.seasons = seasonsEl.value.split(/[\s,]+/).map(Number).filter(n => n > 0);
+    }
+    return body;
+  }
+
+  async function startPipeline(kind, body) {
   const btn = document.getElementById('btn-' + kind);
   btn.disabled = true;
   setBadge(kind + '-badge', 'running');
 
   try {
-    const res = await fetch('/api/admin/' + kind, { method: 'POST' });
+    const fetchOpts = { method: 'POST' };
+    if (body) {
+      fetchOpts.headers = { 'Content-Type': 'application/json' };
+      fetchOpts.body = JSON.stringify(body);
+    }
+    const res = await fetch('/api/admin/' + kind, fetchOpts);
     const data = await res.json();
     if (!data.ok) {
       alert(data.message);
@@ -416,9 +523,18 @@ async function startPipeline(kind) {
   }
 }
 
+  function startPipelineWithOpts(kind) {
+    startPipeline(kind, gatherPipelineOpts(kind));
+  }
+
   function startDestructive(kind, message) {
     if (!confirm(message)) return;
     startPipeline(kind);
+  }
+
+  function startDestructiveWithOpts(kind, message) {
+    if (!confirm(message)) return;
+    startPipeline(kind, gatherPipelineOpts(kind));
   }
 
   function initDashboardModel() {
@@ -439,33 +555,212 @@ async function startPipeline(kind) {
     status.textContent = 'Switching…';
     status.style.color = 'var(--gold)';
 
-    fetch('/api/admin/switch-model', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model_type: sel.value })
-    })
-      .then(r => r.json())
-      .then(data => {
-        btn.disabled = false;
-        if (data.ok) {
-          status.textContent = 'Active: ' + data.model_type;
-          status.style.color = 'var(--green)';
-          const navSel = document.getElementById('model-select');
-          if (navSel) navSel.value = data.model_type;
-        } else {
-          status.textContent = 'Error: ' + data.message;
-          status.style.color = 'var(--red)';
-        }
-      })
-      .catch(err => {
-        btn.disabled = false;
-        status.textContent = 'Error: ' + err.message;
+  fetch('/api/admin/switch-model', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_type: sel.value })
+  })
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false;
+      if (data.ok) {
+        status.textContent = 'Active: ' + data.model_type;
+        status.style.color = 'var(--green)';
+        const navSel = document.getElementById('model-select');
+        if (navSel) navSel.value = data.model_type;
+      } else {
+        status.textContent = 'Error: ' + data.message;
         status.style.color = 'var(--red)';
-      });
+      }
+    })
+    .catch(err => {
+      btn.disabled = false;
+      status.textContent = 'Error: ' + err.message;
+      status.style.color = 'var(--red)';
+    });
+}
+
+  /* ------------------------------------------------------------------ */
+  /*  Shell Runner (WebSocket)                                          */
+  /* ------------------------------------------------------------------ */
+
+  let shellWs = null;
+  let shellRunning = false;
+  const shellHistory = [];
+  let shellHistIdx = -1;
+
+  function shellSetStatus(connected) {
+    const el = document.getElementById('shell-ws-status');
+    el.textContent = connected ? 'connected' : 'disconnected';
+    el.className = 'ws-status ' + (connected ? 'ws-connected' : 'ws-disconnected');
   }
+
+  function shellConnect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    shellWs = new WebSocket(proto + '//' + location.host + '/ws/admin/shell');
+    shellWs.onopen = () => shellSetStatus(true);
+    shellWs.onclose = () => { shellSetStatus(false); shellRunning = false; document.getElementById('btn-shell-kill').disabled = true; };
+    shellWs.onmessage = (ev) => {
+      const msg = JSON.parse(ev.data);
+      const out = document.getElementById('shell-output');
+      if (msg.type === 'stdout') {
+        const span = document.createElement('span');
+        if (msg.data.startsWith('$ ')) {
+          span.className = 'cmd-echo';
+        }
+        span.textContent = msg.data;
+        out.appendChild(span);
+      } else if (msg.type === 'exit') {
+        const span = document.createElement('span');
+        span.className = msg.code === 0 ? 'exit-ok' : 'exit-err';
+        span.textContent = '\n[exit ' + msg.code + ']\n\n';
+        out.appendChild(span);
+        shellRunning = false;
+        document.getElementById('btn-shell-kill').disabled = true;
+      }
+      out.scrollTop = out.scrollHeight;
+    };
+  }
+
+  function shellSend() {
+    const input = document.getElementById('shell-input');
+    const cmd = input.value.trim();
+    if (!cmd || !shellWs || shellWs.readyState !== 1) return;
+    shellHistory.push(cmd);
+    shellHistIdx = shellHistory.length;
+    shellWs.send(JSON.stringify({ cmd }));
+    input.value = '';
+    shellRunning = true;
+    document.getElementById('btn-shell-kill').disabled = false;
+  }
+
+  function shellKill() {
+    if (shellWs && shellWs.readyState === 1) {
+      shellWs.send(JSON.stringify({ type: 'kill' }));
+    }
+  }
+
+  function shellClear() {
+    document.getElementById('shell-output').innerHTML = '';
+  }
+
+  function shellReconnect() {
+    if (shellWs) shellWs.close();
+    setTimeout(shellConnect, 200);
+  }
+
+  document.getElementById('shell-input').addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (shellHistIdx > 0) { shellHistIdx--; this.value = shellHistory[shellHistIdx]; }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (shellHistIdx < shellHistory.length - 1) { shellHistIdx++; this.value = shellHistory[shellHistIdx]; }
+      else { shellHistIdx = shellHistory.length; this.value = ''; }
+    }
+  });
+
+  /* ------------------------------------------------------------------ */
+  /*  Python REPL (WebSocket)                                           */
+  /* ------------------------------------------------------------------ */
+
+  let replWs = null;
+  const replHistory = [];
+  let replHistIdx = -1;
+
+  function replSetStatus(connected) {
+    const el = document.getElementById('repl-ws-status');
+    el.textContent = connected ? 'connected' : 'disconnected';
+    el.className = 'ws-status ' + (connected ? 'ws-connected' : 'ws-disconnected');
+  }
+
+  function replConnect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    replWs = new WebSocket(proto + '//' + location.host + '/ws/admin/repl');
+    replWs.onopen = () => replSetStatus(true);
+    replWs.onclose = () => replSetStatus(false);
+    replWs.onmessage = (ev) => {
+      const msg = JSON.parse(ev.data);
+      const out = document.getElementById('repl-output');
+      if (msg.data) {
+        const span = document.createElement('span');
+        span.className = 'repl-out';
+        span.textContent = msg.data;
+        out.appendChild(span);
+      }
+      const prompt = document.createElement('span');
+      prompt.className = 'repl-prompt';
+      prompt.textContent = msg.more ? '... ' : '>>> ';
+      out.appendChild(prompt);
+      out.scrollTop = out.scrollHeight;
+    };
+  }
+
+  function replSend() {
+    const input = document.getElementById('repl-input');
+    const code = input.value;
+    if (!replWs || replWs.readyState !== 1) return;
+    if (code.trim()) {
+      replHistory.push(code);
+      replHistIdx = replHistory.length;
+    }
+    const out = document.getElementById('repl-output');
+    const lastPrompt = out.querySelector('.repl-prompt:last-child');
+    if (lastPrompt) lastPrompt.remove();
+    const echo = document.createElement('span');
+    echo.className = 'cmd-echo';
+    const lines = code.split('\n');
+    echo.textContent = lines.map((l, i) => (i === 0 ? '>>> ' : '... ') + l).join('\n') + '\n';
+    out.appendChild(echo);
+    out.scrollTop = out.scrollHeight;
+    replWs.send(JSON.stringify({ code }));
+    input.value = '';
+  }
+
+  function replKeyHandler(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      replSend();
+    } else if (e.key === 'ArrowUp' && !e.shiftKey) {
+      const ta = e.target;
+      if (ta.selectionStart === 0) {
+        e.preventDefault();
+        if (replHistIdx > 0) { replHistIdx--; ta.value = replHistory[replHistIdx]; }
+      }
+    } else if (e.key === 'ArrowDown' && !e.shiftKey) {
+      const ta = e.target;
+      if (ta.selectionEnd === ta.value.length) {
+        e.preventDefault();
+        if (replHistIdx < replHistory.length - 1) { replHistIdx++; ta.value = replHistory[replHistIdx]; }
+        else { replHistIdx = replHistory.length; ta.value = ''; }
+      }
+    }
+  }
+
+  function replClear() {
+    const out = document.getElementById('repl-output');
+    out.innerHTML = '<span class="repl-prompt">>>> </span>';
+  }
+
+  function replReset() {
+    if (replWs && replWs.readyState === 1) {
+      replWs.send(JSON.stringify({ type: 'reset' }));
+    }
+  }
+
+  function replReconnect() {
+    if (replWs) replWs.close();
+    setTimeout(replConnect, 200);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Init                                                              */
+  /* ------------------------------------------------------------------ */
 
 fetchStatus();
   initDashboardModel();
+  shellConnect();
+  replConnect();
 </script>
 </body>
 </html>

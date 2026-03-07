@@ -13,7 +13,7 @@ from typing import Annotated
 
 import grpc
 import pandas as pd
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Query, Request, WebSocket
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -24,11 +24,14 @@ from pydantic import BaseModel
 
 from winprob.app.admin import (
     PipelineKind,
+    PipelineOptions,
     conflicting_pipeline,
     gather_data_status,
     gather_model_status,
     get_state,
     run_pipeline,
+    ws_repl_run,
+    ws_shell_run,
 )
 from winprob.app.data_cache import (
     TEAM_NAMES,
@@ -1000,6 +1003,15 @@ class _OddsConfigRequest(BaseModel):
     api_key: str
 
 
+class _PipelineOptionsRequest(BaseModel):
+    """Body for POST /api/admin/ingest and /api/admin/update with options."""
+
+    include_preseason: bool = False
+    seasons: list[int] | None = None
+    refresh_mlbapi: bool = True
+    refresh_retro: bool = True
+
+
 @app.get("/api/active-model", response_model=None)
 async def api_active_model(request: Request) -> dict | JSONResponse:
     """Return the currently active model type and available alternatives."""
@@ -1098,7 +1110,7 @@ async def api_admin_save_odds_config(body: _OddsConfigRequest) -> dict:
 
 
 @app.post("/api/admin/ingest")
-async def api_admin_ingest() -> dict:
+async def api_admin_ingest(body: _PipelineOptionsRequest | None = None) -> dict:
     """Full re-ingestion: clears all processed data and re-ingests every season."""
     blocker = conflicting_pipeline()
     if blocker is not None:
@@ -1106,12 +1118,20 @@ async def api_admin_ingest() -> dict:
             "ok": False,
             "message": f"Cannot start ingest — {blocker.value} pipeline is running.",
         }
-    asyncio.create_task(run_pipeline(PipelineKind.INGEST, on_success=_reload_app))
+    opts: PipelineOptions | None = None
+    if body:
+        opts = PipelineOptions(
+            include_preseason=body.include_preseason,
+            seasons=body.seasons,
+            refresh_mlbapi=body.refresh_mlbapi,
+            refresh_retro=body.refresh_retro,
+        )
+    asyncio.create_task(run_pipeline(PipelineKind.INGEST, on_success=_reload_app, opts=opts))
     return {"ok": True, "message": "Full re-ingestion started."}
 
 
 @app.post("/api/admin/update")
-async def api_admin_update() -> dict:
+async def api_admin_update(body: _PipelineOptionsRequest | None = None) -> dict:
     """Update current season data only (non-destructive)."""
     blocker = conflicting_pipeline()
     if blocker is not None:
@@ -1119,7 +1139,15 @@ async def api_admin_update() -> dict:
             "ok": False,
             "message": f"Cannot start update — {blocker.value} pipeline is running.",
         }
-    asyncio.create_task(run_pipeline(PipelineKind.UPDATE, on_success=_reload_app))
+    opts: PipelineOptions | None = None
+    if body:
+        opts = PipelineOptions(
+            include_preseason=body.include_preseason,
+            seasons=body.seasons,
+            refresh_mlbapi=body.refresh_mlbapi,
+            refresh_retro=body.refresh_retro,
+        )
+    asyncio.create_task(run_pipeline(PipelineKind.UPDATE, on_success=_reload_app, opts=opts))
     return {"ok": True, "message": "Season update started."}
 
 
@@ -1134,3 +1162,20 @@ async def api_admin_retrain() -> dict:
         }
     asyncio.create_task(run_pipeline(PipelineKind.RETRAIN, on_success=_reload_app))
     return {"ok": True, "message": "Retrain pipeline started."}
+
+
+# ---------------------------------------------------------------------------
+# WebSocket — Shell runner and Python REPL
+# ---------------------------------------------------------------------------
+
+
+@app.websocket("/ws/admin/shell")
+async def ws_admin_shell(websocket: WebSocket) -> None:
+    """WebSocket endpoint for executing shell commands with streaming output."""
+    await ws_shell_run(websocket)
+
+
+@app.websocket("/ws/admin/repl")
+async def ws_admin_repl(websocket: WebSocket) -> None:
+    """WebSocket endpoint for an interactive Python REPL session."""
+    await ws_repl_run(websocket)

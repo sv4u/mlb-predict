@@ -319,13 +319,14 @@ Implemented modules:
 2. Pitcher modeling (season-level ERA, K/9, BB/9, WHIP via MLB Stats API)
 3. Calibration engine (isotonic calibration for tree models, Platt calibration for linear/neural models)
 4. Explanation interface (SHAP for tree models; coefficient ranking for logistic)
-5. Web dashboard (FastAPI / Jinja2) with game browser, SHAP charts, upsets, 2026 season page, technical wiki, and admin dashboard (update season, full reingest, retrain with cleanup)
+5. Web dashboard (FastAPI / Jinja2) with game browser, SHAP charts, upsets, 2026 season page, technical wiki, and admin dashboard (update season, full reingest, retrain with cleanup, fine-grained pipeline options, shell runner, Python REPL)
 6. Live standings comparison (predicted vs actual divisional standings, league leaders, team batting/pitching stats via MLB Stats API; `src/winprob/standings.py` + `src/winprob/mlbapi/standings.py`)
 7. Sitemap (HTML visual sitemap at `/sitemap` + XML sitemap at `/sitemap.xml`; linked from all page navigation)
 8. CLI query tool (`scripts/query_game.py`)
 9. Daily automation (`scripts/update_daily.sh` + cron)
 10. EV Calculator (expected value, implied probability, edge, ROI, break-even probability, Kelly criterion; standalone page at `/tools/ev-calculator` + embedded widget on game detail pages with auto-populated model probabilities)
 11. Pre-season / spring training support (`game_type` column: `R`=regular, `S`=spring; schedule ingestion via `--include-preseason`; odds from both `baseball_mlb` and `baseball_mlb_preseason` sport keys; UI badges and caveat for pre-season predictions)
+12. Admin console enhancements: fine-grained pipeline controls (season picker, `--include-preseason` toggle, refresh flags per pipeline); WebSocket shell runner (`WS /ws/admin/shell`) for streaming command execution; WebSocket Python REPL (`WS /ws/admin/repl`) with persistent session state
 
 Planned modules:
 

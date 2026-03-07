@@ -59,6 +59,9 @@ async def main() -> None:
     ap.add_argument("--seasons", nargs="*", type=int, default=[])
     ap.add_argument("--refresh-mlbapi", action="store_true")
     ap.add_argument("--refresh-retro", action="store_true")
+    ap.add_argument(
+        "--include-preseason", action="store_true", help="Include spring training games"
+    )
     args = ap.parse_args()
 
     current_year = datetime.now(timezone.utc).year
@@ -75,9 +78,11 @@ async def main() -> None:
 
     async def schedule_task(season: int) -> TaskResult:
         async with mlb_sem:
-            cmd = f"{sys.executable} scripts/ingest_schedule.py --seasons {season}" + (
-                " --refresh-mlbapi" if args.refresh_mlbapi else ""
-            )
+            cmd = f"{sys.executable} scripts/ingest_schedule.py --seasons {season}"
+            if args.refresh_mlbapi:
+                cmd += " --refresh-mlbapi"
+            if args.include_preseason:
+                cmd += " --include-preseason"
             return await run_stage("schedule", season, cmd)
 
     async def retro_task(season: int) -> TaskResult:
