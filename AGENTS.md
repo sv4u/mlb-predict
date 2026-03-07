@@ -117,6 +117,8 @@ Columns:
 -   game_number (int)
 -   status (str)
 - game_type (str: R=regular, S=spring training)
+- home_score (int, nullable: final home score for completed games)
+- away_score (int, nullable: final away score for completed games)
 
 Checksum file:
 
@@ -315,7 +317,7 @@ Agents must NOT:
 
 Implemented modules:
 
-1. Feature engineering pipeline (100+ features, multi-window rolling, EWMA, Elo, home/away splits, FanGraphs, Statcast, bullpen, weather, Vegas)
+1. Feature engineering pipeline (119 features, multi-window rolling, EWMA, Elo, home/away splits, FanGraphs, Statcast, bullpen, weather, Vegas, is_spring)
 2. Pitcher modeling (season-level ERA, K/9, BB/9, WHIP via MLB Stats API)
 3. Calibration engine (isotonic calibration for tree models, Platt calibration for linear/neural models)
 4. Explanation interface (SHAP for tree models; coefficient ranking for logistic)
@@ -325,8 +327,10 @@ Implemented modules:
 8. CLI query tool (`scripts/query_game.py`)
 9. Daily automation (`scripts/update_daily.sh` + cron)
 10. EV Calculator (expected value, implied probability, edge, ROI, break-even probability, Kelly criterion; standalone page at `/tools/ev-calculator` + embedded widget on game detail pages with auto-populated model probabilities)
-11. Pre-season / spring training support (`game_type` column: `R`=regular, `S`=spring; schedule ingestion via `--include-preseason`; odds from both `baseball_mlb` and `baseball_mlb_preseason` sport keys; UI badges and caveat for pre-season predictions)
+11. Pre-season / spring training support (`game_type` column: `R`=regular, `S`=spring; schedule ingestion with `--include-preseason` as default; `--no-preseason` to opt out; odds from both `baseball_mlb` and `baseball_mlb_preseason` sport keys; UI badges and caveat for pre-season predictions)
 12. Admin console enhancements: fine-grained pipeline controls (season picker, `--include-preseason` toggle, refresh flags per pipeline); WebSocket shell runner (`WS /ws/admin/shell`) for streaming command execution; WebSocket Python REPL (`WS /ws/admin/repl`) with persistent session state
+13. Spring training feature builder (`scripts/build_spring_features.py`): builds features for spring training games from MLB Stats API schedule scores + prior-season team state; `is_spring` binary feature; configurable `--spring-weight` (default 0.25) for sample weighting during training
+14. Pre-training data validation: validates all required data files (schedule, regular-season features) exist for seasons 2000–current before training; lenient on spring training gaps
 
 Planned modules:
 

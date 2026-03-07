@@ -194,6 +194,8 @@ FEATURE_COLS: list[str] = [
     "game_temp_f",
     "game_wind_mph",
     "game_humidity",
+    # --- Game type (regular season vs spring training) -------------------------
+    "is_spring",
 ]
 
 FEATURE_COLS = list(dict.fromkeys(FEATURE_COLS))
@@ -614,6 +616,9 @@ def build_feature_matrix(
     weather_feats = build_weather_features(gl, weather_df)
     for col in weather_feats.columns:
         combined[col] = weather_feats[col].values
+
+    # --- Game type (regular season) -------------------------------------------
+    combined["is_spring"] = 0.0
 
     # --- Differential features ----------------------------------------------
     combined["pythag_diff_30"] = combined["home_pythag_30"] - combined["away_pythag_30"]

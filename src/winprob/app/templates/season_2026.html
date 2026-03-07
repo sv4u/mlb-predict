@@ -63,6 +63,7 @@
     <a href="/wiki">Wiki</a>
     <a href="/chat">Chat</a>
     <a href="/dashboard">Admin</a>
+    <a href="/sitemap">Sitemap</a>
     <div class="model-selector">
       <span>Model:</span>
       <select id="model-select">
@@ -367,7 +368,7 @@ async function init() {
         }
       }
       html += '<tr>' +
-        '<td style="white-space:nowrap;font-size:0.8rem">' + formatGameDate(g.date) + '</td>' +
+        '<td data-sort-value="' + g.date + '" style="white-space:nowrap;font-size:0.8rem">' + formatGameDate(g.date) + '</td>' +
         '<td>' + dateBadge(g.date) + '</td>' +
         '<td><a href="/game/' + g.game_pk + '">' + g.away_name + ' @ ' + g.home_name + '</a></td>' +
         '<td><div class="prob-bar"><div class="bar-wrap"><div class="bar-fill" style="width:' + Math.round(ph * 100) + '%;background:' + probColor(ph) + '"></div></div><span class="tabular-nums" style="font-weight:' + (ph >= 0.55 ? '700' : '400') + '">' + (ph * 100).toFixed(1) + '%</span></div></td>' +

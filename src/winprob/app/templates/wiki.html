@@ -152,6 +152,7 @@
         <li><a href="#f-advanced">Advanced Metrics</a></li>
         <li><a href="#f-context">Context &amp; Venue</a></li>
         <li><a href="#f-vegas-weather">Vegas &amp; Weather</a></li>
+        <li><a href="#f-gametype">Game Type</a></li>
       </ul>
     </li>
     <li><a href="#models">Models</a>
@@ -171,6 +172,8 @@
         <li><a href="#t-timeweight">Time Weighting</a></li>
         <li><a href="#t-hpo">Optuna HPO</a></li>
         <li><a href="#t-features">Dynamic Features</a></li>
+        <li><a href="#t-spring">Spring Training</a></li>
+        <li><a href="#t-validation">Data Validation</a></li>
       </ul>
     </li>
     <li><a href="#evaluation">Evaluation &amp; Metrics</a>
@@ -216,11 +219,11 @@
 <h2 id="overview">System Overview</h2>
 
 <p>
-  This system predicts the probability that the home team wins each MLB regular season game,
-  covering seasons 2000 through 2026. It combines 25 years of historical data from multiple
-  authoritative sources, engineers over 100 pre-game features, and trains six different machine
-  learning models. The default production model is a <strong>stacked ensemble</strong> that blends
-  all five base models for optimal accuracy and calibration.
+  This system predicts the probability that the home team wins each MLB regular season and
+  spring training game, covering seasons 2000 through 2026. It combines 25 years of historical
+  data from multiple authoritative sources, engineers 119 pre-game features, and trains six
+  different machine learning models. The default production model is a <strong>stacked
+    ensemble</strong> that blends all five base models for optimal accuracy and calibration.
 </p>
 
 <div class="info-box">
@@ -231,8 +234,10 @@
 
 <p>The end-to-end pipeline flows through four stages:</p>
 <ol>
-  <li><strong>Data ingestion</strong> — fetch raw data from 6 external sources into structured Parquet files</li>
-  <li><strong>Feature engineering</strong> — compute 100+ pre-game features per game from the raw data</li>
+  <li><strong>Data ingestion</strong> — fetch raw data from 6 external sources into structured Parquet files (including
+    spring training schedules with scores)</li>
+  <li><strong>Feature engineering</strong> — compute 119 pre-game features per game from the raw data (regular season from
+    gamelogs, spring training from schedule scores)</li>
   <li><strong>Model training</strong> — train 6 models with time-weighted samples, calibration, and hyperparameter optimisation</li>
   <li><strong>Prediction &amp; monitoring</strong> — generate immutable prediction snapshots and track model drift over time</li>
 </ol>
@@ -318,7 +323,9 @@
   the API.
 </p>
 <ul>
-  <li><strong>Schedule data:</strong> Every regular season game from 2000–2026 with game IDs, teams, venue, date/time, doubleheader flags</li>
+  <li><strong>Schedule data:</strong> Every regular season and spring training game from 2000–2026 with game IDs, teams,
+    venue, date/time, doubleheader flags, and final scores (home_score, away_score). Spring training data is ingested by
+    default.</li>
   <li><strong>Pitcher stats:</strong> Season-level ERA, K/9, BB/9, WHIP for every pitcher — used for prior-season starting pitcher quality features</li>
   <li><strong>Live standings:</strong> Current-season wins, losses, run differential, division/league rank — used for the predicted vs actual comparison on the <a href="/standings">Standings page</a></li>
   <li><strong>Team statistics:</strong> Aggregate team batting (AVG, OBP, SLG, OPS, R, H, 2B, 3B, HR, RBI, SB, BB, SO) and pitching (ERA, W, L, SV, IP, H, BB, SO, WHIP, HR) stats per season</li>
@@ -334,7 +341,9 @@
 </p>
 <p>
   Retrosheet data powers the core rolling stats, Elo ratings, pitcher ERA calculations, and
-  park factors. It is the backbone of all historical feature engineering.
+  park factors. It is the backbone of all historical <strong>regular season</strong> feature
+  engineering. Spring training games are not covered by Retrosheet; their features are built
+  separately from MLB Stats API schedule scores and prior-season team state.
 </p>
 
 <h3 id="ds-fangraphs">FanGraphs</h3>
@@ -425,10 +434,11 @@ If ML &gt; 0 (underdog):   prob = 100 / (ML + 100)</code></pre>
 <h2 id="features">Feature Engineering</h2>
 
 <p>
-  Every game is described by <strong>100+ pre-game features</strong> computed from
+  Every game is described by <strong>119 pre-game features</strong> computed from
   the raw data sources. Features are always computed <em>before</em> the game occurs — no future
   information ever leaks into the feature set. Cross-season continuity is maintained: rolling
-  windows and Elo ratings carry forward from the previous season.
+  windows and Elo ratings carry forward from the previous season. Spring training games use
+  prior-season team state as features and are marked with the <code>is_spring</code> indicator.
 </p>
 
 <h3 id="f-elo">Elo Ratings (3 features)</h3>
@@ -524,6 +534,23 @@ NewElo = OldElo + K × (Actual - Expected)</code></pre>
   <li><strong>Temperature</strong> (°F), <strong>wind speed</strong> (mph), <strong>humidity</strong> (%) — environmental conditions that affect ball flight and pitcher grip</li>
 </ul>
 
+
+<h3 id="f-gametype">Game Type (1 feature)</h3>
+<ul>
+  <li><strong><code>is_spring</code></strong> — binary indicator: <code>1.0</code> for spring training games,
+    <code>0.0</code> for regular season games. Derived from the <code>game_type</code> column in the
+    schedule data (<code>S</code> = spring training, <code>R</code> = regular season). This allows
+    the model to learn that spring training games have different predictive patterns — teams rest
+    starters, try new lineups, and play with less intensity than in the regular season.
+  </li>
+</ul>
+<p>
+  Spring training features are built by <code>scripts/build_spring_features.py</code> using
+  final scores from the MLB Stats API schedule (not Retrosheet, which only covers regular season
+  games) and prior-season team state. During model training, spring training games receive a
+  configurable reduced sample weight (default 0.25×) so they contribute signal without
+  dominating regular-season patterns.
+</p>
 
 <!-- ================================================================== -->
 <h2 id="models">Models</h2>
@@ -763,6 +790,41 @@ Example (training for 2025 evaluation):
   correlated with the 15-day versions) are automatically pruned to reduce noise for tree models.
 </p>
 
+
+<h3 id="t-spring">Spring Training Weighting</h3>
+<p>
+  Spring training games are included in training data but receive a <strong>reduced sample
+    weight</strong> (configurable via <code>--spring-weight</code>, default 0.25). This means
+  a spring training game counts as one-quarter of a regular season game in the loss function.
+  The weight is multiplicative with the time-decay weight — a 2020 spring training game receives
+  both the time decay factor and the spring training discount.
+</p>
+<p>
+  Spring training features are loaded from <code>features_spring_YYYY.parquet</code> files
+  alongside regular-season <code>features_YYYY.parquet</code> files. The
+  <code>_load_all_feature_files()</code> function merges both by season, adding backward
+  compatibility for older feature files that lack the <code>is_spring</code> column (defaulting
+  to 0.0).
+</p>
+<pre><code>total_weight = time_decay_weight × spring_factor
+
+where spring_factor = 0.25 if is_spring == 1.0, else 1.0</code></pre>
+
+<h3 id="t-validation">Pre-Training Data Validation</h3>
+<p>
+  Before training begins, the pipeline validates that all required data files are present
+  for every season from 2000 to the current year:
+</p>
+<ul>
+  <li><strong>Schedule files:</strong> <code>games_YYYY.parquet</code> must exist for every season</li>
+  <li><strong>Regular-season features:</strong> <code>features_YYYY.parquet</code> must exist for every season</li>
+  <li><strong>Spring training features:</strong> counted but not required (lenient — some older seasons may have no
+    spring training data)</li>
+</ul>
+<p>
+  If any required files are missing, training aborts with a clear error message listing the
+  gaps. This prevents training on incomplete datasets that could silently degrade model quality.
+</p>
 
 <!-- ================================================================== -->
 <h2 id="evaluation">Evaluation &amp; Metrics</h2>
@@ -1119,8 +1181,8 @@ Example (training for 2025 evaluation):
   <strong>Retrain Models</strong>) now expose configurable options:
 </p>
 <ul>
-  <li><strong>Include pre-season</strong> — toggle to include spring training games (<code>--include-preseason</code>)
-  </li>
+  <li><strong>Include pre-season</strong> — spring training games are included by default; uncheck to exclude them
+    (<code>--no-preseason</code>)</li>
   <li><strong>Refresh MLB API / Retrosheet</strong> — control whether to re-fetch from external sources or use cached
     data</li>
   <li><strong>Seasons</strong> — specify which seasons to target (e.g. <code>2025, 2026</code>) instead of the default
@@ -1146,8 +1208,8 @@ Example (training for 2025 evaluation):
   <li>Arrow keys navigate command history</li>
 </ul>
 <div class="tip-box">
-  <strong>Example:</strong> Re-ingest 2026 with pre-season games directly from the shell:<br>
-  <code>python scripts/ingest_schedule.py --seasons 2026 --include-preseason --refresh-mlbapi</code>
+  <strong>Example:</strong> Re-ingest 2026 schedule directly from the shell (spring training included by default):<br>
+  <code>python scripts/ingest_schedule.py --seasons 2026 --refresh-mlbapi</code>
 </div>
 
 <h3 id="admin-repl">Python REPL</h3>
@@ -1184,11 +1246,13 @@ Example (training for 2025 evaluation):
 
 <span class="hl2">Feature Engineering</span>
  gamelogs + schedule + crosswalk + pitcher_stats + fangraphs + vegas + weather
-    └──▶  <span class="hl">build_feature_matrix()</span>  ──▶  features_YYYY.parquet (100+ features/game)
+    └──▶ <span class="hl">build_feature_matrix()</span> ──▶ features_YYYY.parquet (119 features/game)
+    schedule (spring training scores) + prior-season features
+    └──▶ <span class="hl">build_spring_features()</span> ──▶ features_spring_YYYY.parquet
 
 <span class="hl2">Model Training</span>
- features_YYYY.parquet  ──▶  <span class="hl">run_expanding_cv()</span>  ──▶  CV metrics + model artifacts
-                        ──▶  <span class="hl">train_production_model()</span>  ──▶  6 production models
+features_YYYY + features_spring_YYYY ──▶ <span class="hl">run_expanding_cv()</span> ──▶ CV metrics
+──▶ <span class="hl">train_production_model()</span> ──▶ 6 production models
 
 <span class="hl2">Prediction &amp; Serving</span>
  features + model  ──▶  <span class="hl">_predict_proba()</span>  ──▶  P(home win) per game

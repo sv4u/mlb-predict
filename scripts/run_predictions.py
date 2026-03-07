@@ -60,6 +60,8 @@ def main() -> None:
     feat_cols = meta.feature_cols
 
     feat_df = pd.read_parquet(features_path)
+    if "is_spring" not in feat_df.columns:
+        feat_df["is_spring"] = 0.0
     clean = feat_df.dropna(subset=feat_cols)
     X_df = clean[feat_cols].astype(float)
     y_prob = _predict_proba(model, X_df)

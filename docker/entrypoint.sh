@@ -88,6 +88,9 @@ else
         run_step "Build historical feature matrices (incl. Statcast, Vegas, weather)" \
             python scripts/build_features.py
 
+        run_step "Build spring training features (all seasons)" \
+            python scripts/build_spring_features.py
+
         run_step "Build 2026 pre-season features" \
             python scripts/build_features_2026.py
 

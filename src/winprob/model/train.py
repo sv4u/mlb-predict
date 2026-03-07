@@ -322,14 +322,23 @@ def _available_features(
     return avail
 
 
+_DEFAULT_SPRING_WEIGHT: float = 0.25
+
+
 def _prep(
     df: pd.DataFrame,
     *,
     feature_cols: list[str] | None = None,
     time_weighted: bool = True,
     time_decay: float = _TIME_DECAY,
+    spring_weight: float = _DEFAULT_SPRING_WEIGHT,
 ) -> tuple[pd.DataFrame, np.ndarray, np.ndarray]:
-    """Return X (DataFrame), y, sample_weights from a feature DataFrame."""
+    """Return X (DataFrame), y, sample_weights from a feature DataFrame.
+
+    Spring training games (``is_spring == 1.0``) receive a reduced sample
+    weight of ``spring_weight`` (default 0.25) so they contribute signal
+    without dominating regular-season patterns.
+    """
     cols = feature_cols or FEATURE_COLS
     clean = df.dropna(subset=cols + ["home_win"])
     X = clean[cols].astype(float)
@@ -338,6 +347,9 @@ def _prep(
         w = _season_weights(clean["season"], decay=time_decay)
     else:
         w = np.ones(len(y))
+    if "is_spring" in clean.columns:
+        is_spring = clean["is_spring"].values.astype(float)
+        w = w * np.where(is_spring == 1.0, spring_weight, 1.0)
     return X, y, w
 
 
@@ -503,6 +515,7 @@ def run_optuna_hpo(
                 train_df,
                 feature_cols=feat_cols,
                 time_decay=time_decay,
+                spring_weight=_DEFAULT_SPRING_WEIGHT,
             )
             eval_df = season_dfs[eval_s]
             eval_clean = eval_df.dropna(subset=feat_cols + ["home_win"])
@@ -554,6 +567,28 @@ def run_optuna_hpo(
 # ---------------------------------------------------------------------------
 
 
+def _load_all_feature_files(features_dir: Path) -> dict[int, pd.DataFrame]:
+    """Load regular-season and spring training feature files, merging by season.
+
+    Adds ``is_spring = 0.0`` to DataFrames that lack the column for backward
+    compatibility with feature files built before this column was introduced.
+    """
+    season_dfs: dict[int, list[pd.DataFrame]] = {}
+
+    for f in sorted(features_dir.glob("features_*.parquet")):
+        stem = f.stem
+        if stem.startswith("features_spring_"):
+            season = int(stem.split("_")[2])
+        else:
+            season = int(stem.split("_")[1])
+        df = pd.read_parquet(f)
+        if "is_spring" not in df.columns:
+            df["is_spring"] = 0.0
+        season_dfs.setdefault(season, []).append(df)
+
+    return {s: pd.concat(dfs, ignore_index=True) for s, dfs in season_dfs.items()}
+
+
 def run_expanding_cv(
     features_dir: Path = Path("data/processed/features"),
     model_dir: Path = Path("data/models"),
@@ -566,16 +601,14 @@ def run_expanding_cv(
     mlp_params: dict[str, Any] | None = None,
     time_decay: float | None = None,
     platt_C: float | None = None,
+    spring_weight: float = _DEFAULT_SPRING_WEIGHT,
 ) -> dict[str, list[dict]]:
     """Expanding-window CV with time-weighted training and Platt calibration."""
     model_types = model_types or ["logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"]
     decay = time_decay if time_decay is not None else _TIME_DECAY
     cal_C = platt_C if platt_C is not None else 1.0
 
-    raw_season_dfs: dict[int, pd.DataFrame] = {
-        int(f.stem.split("_")[1]): pd.read_parquet(f)
-        for f in sorted(features_dir.glob("features_*.parquet"))
-    }
+    raw_season_dfs = _load_all_feature_files(features_dir)
     if not raw_season_dfs:
         raise RuntimeError(f"No feature files found in {features_dir}")
 
@@ -596,7 +629,12 @@ def run_expanding_cv(
 
         train_seasons = seasons[:i]
         train_df = pd.concat([season_dfs[s] for s in train_seasons], ignore_index=True)
-        X_train, y_train, w_train = _prep(train_df, feature_cols=feat_cols, time_decay=decay)
+        X_train, y_train, w_train = _prep(
+            train_df,
+            feature_cols=feat_cols,
+            time_decay=decay,
+            spring_weight=spring_weight,
+        )
 
         eval_clean = season_dfs[eval_season].dropna(subset=feat_cols + ["home_win"])
         X_eval = eval_clean[feat_cols].astype(float)
@@ -723,16 +761,14 @@ def train_production_model(
     mlp_params: dict[str, Any] | None = None,
     time_decay: float | None = None,
     platt_C: float | None = None,
+    spring_weight: float = _DEFAULT_SPRING_WEIGHT,
 ) -> dict[str, Any]:
     """Train calibrated production models on all available seasons."""
     model_types = model_types or ["logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"]
     decay = time_decay if time_decay is not None else _TIME_DECAY
     cal_C = platt_C if platt_C is not None else 1.0
 
-    season_frames: dict[int, pd.DataFrame] = {
-        int(f.stem.split("_")[1]): pd.read_parquet(f)
-        for f in sorted(features_dir.glob("features_*.parquet"))
-    }
+    season_frames = _load_all_feature_files(features_dir)
     feat_cols = _available_features(season_frames)
     logger.info(
         "Production training using %d features (of %d FEATURE_COLS)",
@@ -741,7 +777,12 @@ def train_production_model(
     )
 
     all_data = pd.concat(season_frames.values(), ignore_index=True)
-    X_all, y_all, w_all = _prep(all_data, feature_cols=feat_cols, time_decay=decay)
+    X_all, y_all, w_all = _prep(
+        all_data,
+        feature_cols=feat_cols,
+        time_decay=decay,
+        spring_weight=spring_weight,
+    )
     seasons = sorted(season_frames)
 
     cal_size = max(int(0.15 * len(X_all)), 500)

@@ -61,6 +61,8 @@ def test_normalize_schedule_basic(raw_schedule_response: dict) -> None:
         "game_number",
         "status",
         "game_type",
+        "home_score",
+        "away_score",
     }
     assert expected_cols.issubset(set(df.columns))
 
@@ -358,6 +360,50 @@ def test_normalize_schedule_game_type_override() -> None:
     }
     df = normalize_schedule(raw, game_type_override="S")
     assert df.iloc[0]["game_type"] == "S"
+
+
+def test_normalize_schedule_extracts_scores(raw_schedule_response: dict) -> None:
+    """normalize_schedule must extract home_score and away_score from the API response."""
+    df = normalize_schedule(raw_schedule_response).sort_values("game_pk").reset_index(drop=True)
+    assert df.loc[0, "home_score"] == 5
+    assert df.loc[0, "away_score"] == 3
+    assert df.loc[1, "home_score"] == 4
+    assert df.loc[1, "away_score"] == 1
+
+
+def test_normalize_schedule_scores_none_when_missing() -> None:
+    """home_score and away_score must be None when scores are absent from the response."""
+    raw = {
+        "dates": [
+            {
+                "date": "2024-04-01",
+                "games": [
+                    {
+                        "gamePk": 1,
+                        "gameDate": "2024-04-01T18:00:00Z",
+                        "teams": {
+                            "home": {"team": {"id": 111}},
+                            "away": {"team": {"id": 133}},
+                        },
+                        "venue": {},
+                        "doubleHeader": "N",
+                        "gameNumber": 1,
+                        "status": {"detailedState": "Scheduled"},
+                    },
+                ],
+            }
+        ]
+    }
+    df = normalize_schedule(raw)
+    assert len(df) == 1
+    assert pd.isna(df.iloc[0]["home_score"])
+    assert pd.isna(df.iloc[0]["away_score"])
+
+
+def test_schedule_fields_min_includes_score_fields() -> None:
+    """SCHEDULE_FIELDS_MIN must request score data from the API."""
+    assert "teams,home,score" in SCHEDULE_FIELDS_MIN
+    assert "teams,away,score" in SCHEDULE_FIELDS_MIN
 
 
 def test_normalize_schedule_game_type_default() -> None:

@@ -143,6 +143,7 @@
     <a href="/wiki">Wiki</a>
     <a href="/chat">Chat</a>
     <a href="/dashboard">Admin</a>
+    <a href="/sitemap">Sitemap</a>
     <div class="model-selector">
       <span>Model:</span>
       <select id="model-select">
@@ -442,11 +443,14 @@ async function load() {
   document.getElementById('away-prob').textContent = (pa*100).toFixed(1)+'%';
   document.getElementById('away-prob').style.color = pa >= 0.5 ? 'var(--green)' : 'var(--red)';
 
-  // Confidence badges
+  // Confidence badges — "Toss-up" stands alone; only non-toss-up gets " favorite"
   var homeConf = probConfidence(ph);
   var awayConf = probConfidence(pa);
   var favSide = ph >= 0.5 ? 'home' : 'away';
-  if (favSide === 'home') {
+  if (homeConf.label === 'Toss-up') {
+    document.getElementById('home-confidence').innerHTML = '<span class="confidence-badge" style="background:var(--accent-dim);color:var(--accent)">Toss-up</span>';
+    document.getElementById('away-confidence').innerHTML = '<span class="confidence-badge" style="background:var(--accent-dim);color:var(--accent)">Toss-up</span>';
+  } else if (favSide === 'home') {
     document.getElementById('home-confidence').innerHTML = '<span class="confidence-badge" style="background:var(--green-dim);color:var(--green)">' + homeConf.label + ' favorite</span>';
   } else {
     document.getElementById('away-confidence').innerHTML = '<span class="confidence-badge" style="background:var(--green-dim);color:var(--green)">' + awayConf.label + ' favorite</span>';

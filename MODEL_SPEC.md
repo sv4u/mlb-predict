@@ -8,11 +8,11 @@ win probabilities across MLB regular seasons 2000–2026.
 
 # 1. Problem Definition
 
-For each scheduled MLB regular-season game `g`, estimate:
+For each scheduled MLB regular season and spring training game `g`, estimate:
 
 - `P(HomeWin | x_g)`
 
-where `x_g ∈ ℝ^66` contains team- and player-level features constructed exclusively
+where `x_g ∈ ℝ^119` contains team- and player-level features constructed exclusively
 from data available before first pitch.
 
 Outputs are probabilities in `[0, 1]` evaluated by Brier score, calibration error,
@@ -20,7 +20,7 @@ and accuracy. All reported metrics are **fully out-of-sample** (expanding-window
 
 ---
 
-# 2. Feature Set (66 features)
+# 2. Feature Set (119 features)
 
 Features must satisfy:
 
@@ -101,21 +101,33 @@ Applied separately to home and away teams; differentials computed for each windo
 | --- | --- |
 | `park_factor` | Median runs-per-game at venue vs. league average (from historical gamelogs) |
 
+## 2.9 Game type
+
+| Feature | Description |
+| --- | --- |
+| `is_spring` | Binary indicator: 1.0 for spring training, 0.0 for regular season |
+
 ---
 
 # 3. Models
 
 ## 3.1 Training protocol
 
-All four models share the same protocol:
+All six models share the same protocol:
 
 - **Expanding-window cross-validation**: train on seasons < N, evaluate on season N.
   No future data leaks into training or calibration.
 - **Time-weighted sample weights**: exponential decay at `rate=0.12` per season
   (e.g. 2024 weight = 1.0, 2020 weight ≈ 0.61, 2015 weight ≈ 0.30). Adapts the
   model to rule changes (shift ban 2023, pitch clock 2023, etc.).
-- **Platt calibration**: a sigmoid meta-layer `σ(a·logit + b)` fitted on a held-out
-  calibration split. Ensures that predicted 65% games actually win ~65% of the time.
+- **Spring training weighting**: spring training games receive a reduced sample weight
+  (default 0.25×) to contribute signal without dominating regular-season patterns.
+- **Pre-training validation**: all seasons 2000–current must have schedule and
+  regular-season feature files present before training.
+- **Calibration**: isotonic calibration for tree models (LightGBM, XGBoost, CatBoost);
+  Platt calibration (sigmoid meta-layer `σ(a·logit + b)`) for linear and neural models
+  (logistic, MLP). Fitted on a held-out calibration split. Ensures that predicted 65%
+  games actually win ~65% of the time.
 - **Model artifact versioning**: `v3` is the current production version.
 
 ## 3.2 Logistic Regression
@@ -139,7 +151,16 @@ Gradient-boosted trees; captures non-linear feature interactions.
 - **SHAP**: `shap.TreeExplainer`
 - **Production use**: fast batch inference; competitive with XGBoost
 
-## 3.4 XGBoost
+## 3.4 CatBoost
+
+Yandex's CatBoost uses ordered boosting and symmetric (oblivious) decision trees.
+Acts as a complementary tree model in the stacked ensemble.
+
+- **Regularisation**: L2 leaf regularisation, learning rate decay
+- **Architecture**: Symmetric (oblivious) trees with ordered boosting
+- **SHAP**: `shap.TreeExplainer`
+
+## 3.5 XGBoost
 
 Gradient-boosted trees with separate L1/L2 leaf regularisation.
 
@@ -149,19 +170,30 @@ Gradient-boosted trees with separate L1/L2 leaf regularisation.
 - **SHAP**: `shap.TreeExplainer`
 - **Production use**: best single-model Brier score; default when not ensembling
 
-## 3.5 Stacked Ensemble (default production model)
+## 3.6 MLP (Neural Network)
+
+Multi-layer perceptron with three hidden layers (128, 64, 32 units) and ReLU
+activations. Features are z-score normalised before training.
+
+- **Architecture**: 128 → 64 → 32 → 1, Adam optimiser
+- **Regularisation**: L2 weight decay (alpha)
+- **SHAP**: Not supported (coefficient ranking instead)
+
+## 3.7 Stacked Ensemble (default production model)
 
 The meta-learner never sees raw features; it receives the calibrated probability
-outputs of the three base models and blends them optimally.
+outputs of the five base models and blends them optimally.
 
 ```
  Logistic prob  ─┐
- LightGBM prob  ─┼──▶  LogisticRegression(C=0.5)  ──▶  P(home win)
- XGBoost prob   ─┘
+ LightGBM prob  ─┤
+ XGBoost prob   ─┼──▶  LogisticRegression(C=0.5)  ──▶  P(home win)
+ CatBoost prob  ─┤
+ MLP prob       ─┘
 ```
 
 - **Meta-learner**: `LogisticRegression(C=0.5)` fit on the same held-out calibration
-  set used for Platt scaling, so base-model probabilities are out-of-sample
+  set used for base-model calibration, so base-model probabilities are out-of-sample
 - **Production use**: achieves the best overall Brier score and calibration
 
 ---
@@ -183,6 +215,8 @@ outputs of the three base models and blends them optimally.
 | Logistic regression | 0.2443     | 56.2%         | 0.030      |
 | LightGBM (Optuna)   | 0.2448     | 55.9%         | 0.029      |
 | XGBoost (Optuna)    | **0.2442** | 56.4%         | 0.029      |
+| CatBoost (Optuna)   | 0.2470     | —             | —          |
+| MLP (Neural Network)| 0.2464     | —             | —          |
 | Stacked ensemble    | **0.2441** | 56.3%         | 0.029      |
 
 Full season-by-season CV results: `data/models/cv_summary_v3.json`
@@ -243,6 +277,10 @@ Agents MUST NOT:
 | FanGraphs team metrics | ✅ Implemented |
 | Park factors | ✅ Implemented |
 | 2026 pre-season predictions | ✅ Implemented |
+| CatBoost + Optuna HPO | ✅ Implemented (v3) |
+| MLP neural network | ✅ Implemented (v3) |
+| Spring training data integration | ✅ Implemented |
+| Pre-training data validation | ✅ Implemented |
 | Drift monitoring | ✅ Implemented |
 | SHAP attributions | ✅ Implemented |
 | Lineup Monte Carlo simulation | ⬜ Planned |

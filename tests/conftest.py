@@ -75,8 +75,8 @@ def raw_schedule_response() -> dict:
                         "gameDate": "2024-04-01T17:10:00Z",
                         "gameType": "R",
                         "teams": {
-                            "home": {"team": {"id": 111}},
-                            "away": {"team": {"id": 133}},
+                            "home": {"team": {"id": 111}, "score": 5},
+                            "away": {"team": {"id": 133}, "score": 3},
                         },
                         "venue": {"id": 3, "timeZone": {"id": "America/New_York"}},
                         "doubleHeader": "N",
@@ -88,8 +88,8 @@ def raw_schedule_response() -> dict:
                         "gameDate": "2024-04-01T19:40:00Z",
                         "gameType": "R",
                         "teams": {
-                            "home": {"team": {"id": 147}},
-                            "away": {"team": {"id": 139}},
+                            "home": {"team": {"id": 147}, "score": 4},
+                            "away": {"team": {"id": 139}, "score": 1},
                         },
                         "venue": {"id": 3313, "timeZone": {"id": "America/New_York"}},
                         "doubleHeader": "N",

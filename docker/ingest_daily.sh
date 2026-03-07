@@ -30,7 +30,7 @@ log "========================================================"
 log "  Daily ingest — $YEAR — $(date -u '+%Y-%m-%d %H:%M UTC')"
 log "========================================================"
 
-run_step "Refresh $YEAR schedule (MLB Stats API)" \
+run_step "Refresh $YEAR schedule — regular + spring training (MLB Stats API)" \
     python scripts/ingest_schedule.py --seasons "$YEAR" --refresh-mlbapi
 
 run_step "Refresh $YEAR Retrosheet gamelogs" \
@@ -41,6 +41,9 @@ run_step "Rebuild $YEAR crosswalk" \
 
 run_step "Rebuild $YEAR feature matrix (incl. Statcast, Vegas, weather)" \
     python scripts/build_features.py --seasons "$YEAR"
+
+run_step "Build $YEAR spring training features" \
+    python scripts/build_spring_features.py --seasons "$YEAR"
 
 run_step "Rebuild 2026 pre-season features" \
     python scripts/build_features_2026.py

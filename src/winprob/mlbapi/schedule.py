@@ -16,7 +16,9 @@ SCHEDULE_FIELDS_MIN = ",".join(
         "dates,games,gameType",
         "dates,games,status,detailedState",
         "dates,games,teams,home,team,id",
+        "dates,games,teams,home,score",
         "dates,games,teams,away,team,id",
+        "dates,games,teams,away,score",
         "dates,games,venue,id",
         "dates,games,venue,timeZone,id",
         "dates,games,doubleHeader",
@@ -43,6 +45,8 @@ _SCHEDULE_COLS = [
     "game_number",
     "status",
     "game_type",
+    "home_score",
+    "away_score",
 ]
 
 
@@ -101,19 +105,23 @@ def normalize_schedule(
             teams = g.get("teams", {})
             venue = g.get("venue") or {}
             tz = (venue.get("timeZone") or {}).get("id") or None
+            home_side = teams.get("home") or {}
+            away_side = teams.get("away") or {}
             rows.append(
                 {
                     "game_pk": g.get("gamePk"),
                     "game_date_utc": g.get("gameDate"),
                     "game_date_local": local_date_str,
-                    "home_mlb_id": ((teams.get("home") or {}).get("team") or {}).get("id"),
-                    "away_mlb_id": ((teams.get("away") or {}).get("team") or {}).get("id"),
+                    "home_mlb_id": (home_side.get("team") or {}).get("id"),
+                    "away_mlb_id": (away_side.get("team") or {}).get("id"),
                     "venue_id": venue.get("id"),
                     "local_timezone": tz,
                     "double_header": g.get("doubleHeader"),
                     "game_number": g.get("gameNumber"),
                     "status": ((g.get("status") or {}).get("detailedState")),
                     "game_type": game_type_override or g.get("gameType", GAME_TYPE_REGULAR),
+                    "home_score": home_side.get("score"),
+                    "away_score": away_side.get("score"),
                 }
             )
     if not rows:

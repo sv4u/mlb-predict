@@ -2,6 +2,8 @@
 
 Pipeline
 --------
+0. Validate that all required data files (schedule, gamelogs, crosswalk,
+   features) are present for seasons 2000–current year.
 1. (Optional) Run Optuna HPO on LightGBM and XGBoost — 60 trials each,
    evaluated on the last 3 seasons.  Results saved to data/models/hpo_*.json.
 2. Run expanding-window CV for all seasons using the best hyperparameters.
@@ -12,11 +14,63 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
 
-from winprob.model.train import run_expanding_cv, run_optuna_hpo, train_production_model
+from winprob.model.train import (
+    _load_all_feature_files,
+    run_expanding_cv,
+    run_optuna_hpo,
+    train_production_model,
+)
+
+
+def _validate_data_completeness(
+    processed_dir: Path,
+    features_dir: Path,
+    seasons: list[int],
+) -> bool:
+    """Check that all required data files exist for training.
+
+    Returns True if validation passes, False otherwise.
+    Prints warnings for missing files but does not raise on spring training
+    gaps (lenient approach).
+    """
+    ok = True
+    missing_regular: list[str] = []
+    missing_schedule: list[str] = []
+
+    for s in seasons:
+        sched = processed_dir / "schedule" / f"games_{s}.parquet"
+        if not sched.exists():
+            missing_schedule.append(str(s))
+
+        feat = features_dir / f"features_{s}.parquet"
+        if not feat.exists():
+            missing_regular.append(str(s))
+
+    if missing_schedule:
+        print(f"WARNING: Missing schedule files for seasons: {', '.join(missing_schedule)}")
+        ok = False
+    if missing_regular:
+        print(
+            f"WARNING: Missing regular-season feature files for seasons: {', '.join(missing_regular)}"
+        )
+        ok = False
+
+    spring_count = len(list(features_dir.glob("features_spring_*.parquet")))
+    print(
+        f"  Data validation: {len(seasons)} expected seasons, "
+        f"{len(seasons) - len(missing_regular)} regular-season feature files, "
+        f"{spring_count} spring training feature files"
+    )
+
+    if not ok:
+        print("ERROR: Required data files are missing. Run the ingestion pipeline first.")
+    return ok
 
 
 def _load_hpo(model_dir: Path, model_type: str) -> dict | None:
@@ -41,6 +95,12 @@ def main() -> None:
     ap.add_argument("--hpo-trials", type=int, default=200)
     ap.add_argument("--skip-cv", action="store_true", help="Skip CV, only run HPO + production")
     ap.add_argument(
+        "--spring-weight",
+        type=float,
+        default=0.25,
+        help="Sample weight multiplier for spring training games (default: 0.25)",
+    )
+    ap.add_argument(
         "--feature-importance",
         action="store_true",
         help="Run feature importance (SHAP) after training and write report",
@@ -48,11 +108,14 @@ def main() -> None:
     args = ap.parse_args()
     args.model_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load season data
-    season_dfs = {
-        int(f.stem.split("_")[1]): pd.read_parquet(f)
-        for f in sorted(args.features_dir.glob("features_*.parquet"))
-    }
+    season_dfs = _load_all_feature_files(args.features_dir)
+
+    current_year = datetime.now(timezone.utc).year
+    expected_seasons = list(range(2000, current_year + 1))
+    processed_dir = args.features_dir.parent
+    if not _validate_data_completeness(processed_dir, args.features_dir, expected_seasons):
+        print("Aborting training due to missing data. Re-run ingestion pipeline.")
+        sys.exit(1)
 
     lgb_params = _load_hpo(args.model_dir, "lightgbm")
     xgb_params = _load_hpo(args.model_dir, "xgboost")
@@ -107,6 +170,7 @@ def main() -> None:
             mlp_params=mlp_params,
             time_decay=time_decay,
             platt_C=platt_C,
+            spring_weight=args.spring_weight,
         )
 
         all_rows = [row for rows in cv_results.values() for row in rows]
@@ -152,6 +216,7 @@ def main() -> None:
         mlp_params=mlp_params,
         time_decay=time_decay,
         platt_C=platt_C,
+        spring_weight=args.spring_weight,
     )
 
     if args.feature_importance:

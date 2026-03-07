@@ -153,7 +153,10 @@ def _load_features(season: int | None = None) -> pd.DataFrame:
             sys.exit(f"No feature data for season {season}.  Run build_features.py first.")
         return pd.read_parquet(path)
     frames = [pd.read_parquet(f) for f in sorted(feat_dir.glob("features_*.parquet"))]
-    return pd.concat(frames, ignore_index=True)
+    df = pd.concat(frames, ignore_index=True)
+    if "is_spring" not in df.columns:
+        df["is_spring"] = 0.0
+    return df
 
 
 def _load_model(model_dir: Path = Path("data/models"), model_type: str = "stacked"):

@@ -259,7 +259,14 @@ async def main() -> None:
     ap.add_argument(
         "--include-preseason",
         action="store_true",
-        help="Also ingest spring training (gameType=S) alongside regular season",
+        default=True,
+        help="Ingest spring training (gameType=S) alongside regular season (default: True)",
+    )
+    ap.add_argument(
+        "--no-preseason",
+        action="store_false",
+        dest="include_preseason",
+        help="Skip spring training games, ingest regular season only",
     )
     args = ap.parse_args()
 

@@ -119,10 +119,12 @@ Schema:
 | `game_number` | int32? | no | DH number when present |
 | `status` | string | no | e.g., Scheduled |
 | `game_type` | string | yes | `R` = regular season, `S` = spring training |
+| `home_score` | int32? | no | Final home team score (populated for completed games) |
+| `away_score` | int32? | no | Final away team score (populated for completed games) |
 
 Invariants:
 - Unique `game_pk`.
-- Dataset includes `gameType=R` (regular season) by default. When ingested with `--include-preseason`, also includes `gameType=S` (spring training).
+- Dataset includes both `gameType=R` (regular season) and `gameType=S` (spring training) by default. Use `--no-preseason` to exclude spring training.
 
 Checksum schema (minimum):
 
@@ -258,12 +260,13 @@ Invariants:
 
 - One row per team-season; available from 2002 onward.
 
-## 3.7 Features (66-feature matrix)
+## 3.7 Features (119-feature matrix)
 
 Paths:
 
 - `data/processed/features/features_<season>.parquet`
 - `data/processed/features/features_2026.parquet` (pre-season; `home_win = NaN`)
+- `data/processed/features/features_spring_<season>.parquet` (spring training features; `home_win` populated from schedule scores)
 - `data/processed/features/build_features_summary.json`
 
 Schema:
@@ -271,6 +274,7 @@ Schema:
 | Column | Type | Notes |
 |---|---|---|
 | `game_pk` | int64 | Canonical game identifier |
+| `is_spring` | float64 | 1.0 for spring training, 0.0 for regular season |
 | `date` | object (`datetime.date`) | Game date (local) |
 | `season` | int64 | Season |
 | `game_type` | string | `R` = regular season, `S` = spring training |
@@ -314,10 +318,10 @@ Schema:
 
 Invariants:
 
-- Total columns: 71 (66 model features + 5 identifiers + `home_win` + `feature_hash`)
+- Total columns: ~126 (119 model features + identifiers + `home_win` + `feature_hash`)
 - `date` column dtype is always `datetime.date` (never plain string)
-- `game_type` is `R` for regular season, `S` for spring training
-- 2026 rows have `home_win = NaN`; all 66 feature columns are populated from 2025 end-of-season team state
+- `game_type` is `R` for regular season, `S` for spring training. The `is_spring` binary feature is derived from `game_type`.
+- 2026 rows have `home_win = NaN`; all 119 feature columns are populated from 2025 end-of-season team state
 - Spring training games (`game_type=S`) use the same prior-season features; model predictions carry a caveat
 
 ## 3.8 Prediction snapshots
@@ -371,6 +375,26 @@ Schema (both files share the same columns):
 | `pct_gt_0p01` | float64 | % of games with \|delta\| > 0.01 |
 | `pct_gt_0p02` | float64 | % of games with \|delta\| > 0.02 |
 | `pct_gt_0p05` | float64 | % of games with \|delta\| > 0.05 |
+
+## 3.10 Spring Training Features
+
+Path:
+
+- `data/processed/features/features_spring_<season>.parquet`
+
+Schema:
+
+Same columns as regular-season features (Section 3.7) with:
+
+- `is_spring` always `1.0`
+- `home_win` populated from schedule scores (not Retrosheet)
+- Features built from prior-season team state (no in-season rolling stats)
+
+Invariants:
+
+- Built by `scripts/build_spring_features.py`
+- Lenient: seasons with zero spring training games produce no file
+- Uses MLB Stats API schedule scores (not Retrosheet gamelogs)
 
 ---
 

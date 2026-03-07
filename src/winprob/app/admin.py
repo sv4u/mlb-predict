@@ -38,7 +38,7 @@ class PipelineKind(str, Enum):
 class PipelineOptions:
     """User-configurable options for pipeline runs."""
 
-    include_preseason: bool = False
+    include_preseason: bool = True
     seasons: list[int] | None = None
     refresh_mlbapi: bool = True
     refresh_retro: bool = True
@@ -188,7 +188,7 @@ def _ingest_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str
     if opts.refresh_retro:
         refresh_flags += " --refresh-retro"
 
-    preseason_flag = " --include-preseason" if opts.include_preseason else ""
+    preseason_flag = "" if opts.include_preseason else " --no-preseason"
 
     return [
         (
@@ -212,6 +212,10 @@ def _ingest_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str
             f"Build feature matrices ({season_label})",
             f"{python} scripts/build_features.py --seasons {seasons}",
         ),
+        (
+            f"Build spring training features ({season_label})",
+            f"{python} scripts/build_spring_features.py --seasons {seasons}",
+        ),
         ("Build 2026 pre-season features (if needed)", f"{python} scripts/build_features_2026.py"),
     ]
 
@@ -231,7 +235,7 @@ def _update_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str
         year = yr
         season_label = yr
 
-    preseason_flag = " --include-preseason" if opts.include_preseason else ""
+    preseason_flag = "" if opts.include_preseason else " --no-preseason"
     refresh_schedule = " --refresh-mlbapi" if opts.refresh_mlbapi else ""
     refresh_retro = " --refresh" if opts.refresh_retro else ""
 
@@ -264,6 +268,10 @@ def _update_commands(opts: PipelineOptions | None = None) -> list[tuple[str, str
         (
             f"Rebuild feature matrix ({season_label})",
             f"{python} scripts/build_features.py --seasons {year}",
+        ),
+        (
+            f"Rebuild spring training features ({season_label})",
+            f"{python} scripts/build_spring_features.py --seasons {year}",
         ),
         ("Build 2026 pre-season features (if needed)", f"{python} scripts/build_features_2026.py"),
     ]

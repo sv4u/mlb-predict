@@ -1,6 +1,6 @@
 # MLB Win Probability
 
-Research-grade pre-game win probability model for MLB regular season games, 2000–2026.
+Research-grade pre-game win probability model for MLB regular season and spring training games, 2000–2026.
 
 ## Model performance (v3 — out-of-sample, expanding-window CV)
 
@@ -23,11 +23,11 @@ The training pipeline dynamically selects features available across all seasons.
 
 ## Models
 
-The system trains six models on 100+ pre-game features using an **expanding-window protocol** — each season N is evaluated using a model trained exclusively on seasons before N, so all reported metrics are fully out-of-sample. Every model goes through **probability calibration** (isotonic for tree models, Platt sigmoid for linear/neural) and **time-weighted training** (exponential decay rate 0.12 per season, so 2024 weight = 1.0, 2020 weight ≈ 0.61, 2015 weight ≈ 0.30). Features are dynamically selected based on availability across seasons.
+The system trains six models on 119 pre-game features using an **expanding-window protocol** — each season N is evaluated using a model trained exclusively on seasons before N, so all reported metrics are fully out-of-sample. Every model goes through **probability calibration** (isotonic for tree models, Platt sigmoid for linear/neural) and **time-weighted training** (exponential decay rate 0.12 per season, so 2024 weight = 1.0, 2020 weight ≈ 0.61, 2015 weight ≈ 0.30). Features are dynamically selected based on availability across seasons.
 
 ### Logistic Regression
 
-A regularised linear model that serves as the interpretable baseline. All 66 features are z-score standardised before fitting. Because the decision boundary is a hyperplane, the model captures additive effects — for example, a larger Elo differential increases home-win probability by a fixed amount regardless of the other features. Its simplicity makes it fast, stable, and easy to audit.
+A regularised linear model that serves as the interpretable baseline. All 119 features are z-score standardised before fitting. Because the decision boundary is a hyperplane, the model captures additive effects — for example, a larger Elo differential increases home-win probability by a fixed amount regardless of the other features. Its simplicity makes it fast, stable, and easy to audit.
 
 - **Regularisation**: L2 (ridge), `C=1.0`
 - **Solver**: L-BFGS with up to 1 000 iterations
@@ -91,10 +91,11 @@ The stacked ensemble never sees raw features. Instead, it takes the **calibrated
 | **Optuna HPO** | Bayesian hyperparameter search (200 trials per model type) over a 5-season expanding-window objective. Searches `learning_rate`, tree depth, `n_estimators`, `subsample`, `colsample_bytree`, L1/L2 regularisation, and calibration method. Supports LightGBM, XGBoost, and CatBoost. |
 | **Expanding-window CV** | For evaluation season N, the model is trained on all seasons before N. No future data ever leaks into training or calibration. |
 | **Dynamic feature selection** | The pipeline automatically detects the intersection of available features across all season DataFrames and trains using only those features, ensuring robustness to missing columns in older seasons. |
+| **Spring training weighting** | Spring training games are down-weighted via `--spring-weight` (default 0.25) so regular-season performance drives the model more strongly. |
 
 ---
 
-## Features (100+ total)
+## Features (119 total)
 
 ### Team performance (27 features)
 
@@ -145,6 +146,10 @@ The stacked ensemble never sees raw features. Instead, it takes the **calibrated
 
 - **Park run factor** — historical runs per game at the venue vs. league average
 
+### Game type (1 feature)
+
+- **is_spring** — binary: 1.0 for spring training, 0.0 for regular season
+
 ### Vegas odds (2 features)
 
 - **Implied home win probability** — converted from money-line odds (defaults to 0.5 when unavailable)
@@ -173,7 +178,7 @@ pip install -e .
 ### Full data ingestion (first run)
 
 ```bash
-# 1. Fetch MLB schedules (2000–2026)
+# 1. Fetch MLB schedules (2000–2026) — includes preseason by default; use --no-preseason to opt out
 python scripts/ingest_schedule.py --seasons $(seq 2000 2026)
 
 # 2. Fetch Retrosheet gamelogs (historical + current season)
@@ -194,6 +199,9 @@ python scripts/ingest_fangraphs.py --seasons $(seq 2002 2025)
 ```bash
 # Historical seasons (2000–2025)
 python scripts/build_features.py --seasons $(seq 2000 2025)
+
+# Spring training features (schedule scores + prior-season team state)
+python scripts/build_spring_features.py --seasons $(seq 2000 2026)
 
 # 2026 pre-season predictions (uses 2025 end-of-season team strength)
 python scripts/build_features_2026.py
@@ -219,6 +227,7 @@ Skip HPO if you just want to re-train with existing hyperparameters:
 
 ```bash
 # Train all 6 models: logistic, lightgbm, xgboost, catboost, mlp, stacked
+# --spring-weight 0.25 (default) down-weights spring training games
 python scripts/train_model.py
 
 # Train a subset
@@ -335,9 +344,10 @@ The `scripts/update_daily.sh` script refreshes game results, rebuilds features, 
 | 1 | Refresh the current-season MLB schedule (picks up postponements and rescheduled games) |
 | 2 | Refresh the current-season Retrosheet gamelogs (yesterday's results) |
 | 3 | Rebuild the Retrosheet ↔ MLB crosswalk for the current season |
-| 4 | Rebuild the 118-feature matrix for the current season (incl. Statcast, Vegas, weather) |
-| 5 | Rebuild 2026 pre-season predictions from the updated team state |
-| 6 | Kill the running server and start a fresh instance to load the new data |
+| 4 | Rebuild the 119-feature matrix for the current season (incl. Statcast, Vegas, weather) |
+| 5 | Build spring training features for the current season |
+| 6 | Rebuild 2026 pre-season predictions from the updated team state |
+| 7 | Kill the running server and start a fresh instance to load the new data |
 
 All output is appended to `logs/cron.log`; the server log goes to `logs/server.log`.
 
@@ -481,7 +491,7 @@ The container runs two cron jobs via `supercronic`:
 
 | Schedule   | Script                      | What it does |
 | ---------- | --------------------------- | ------------ |
-| 01:00 UTC  | `docker/ingest_daily.sh`    | Refresh current-season schedule and gamelogs, rebuild 118-feature matrix, restart server |
+| 01:00 UTC  | `docker/ingest_daily.sh`    | Refresh current-season schedule and gamelogs (incl. spring training), rebuild 119-feature matrix and spring features, restart server |
 | 23:00 UTC  | `docker/retrain_daily.sh`   | Retrain all 6 models on fresh data, restart server |
 
 Logs are written to `./logs/ingest_daily.log` and `./logs/retrain_daily.log` on the host.
@@ -578,8 +588,9 @@ MLB Stats API     Retrosheet gamelogs   FanGraphs      Statcast (pybaseball)
                     │
                     ▼
               features/
-     features_YYYY.parquet   ←── 118 features per game
-     features_2026.parquet   ←── pre-season 2026 (from build_features_2026.py)
+     features_YYYY.parquet      ←── 119 features per game (build_features.py)
+     features_spring_YYYY.parquet ←── spring training (build_spring_features.py)
+     features_2026.parquet      ←── pre-season 2026 (from build_features_2026.py)
                     │
                     ▼
                models/
@@ -607,7 +618,7 @@ MLB Stats API     Retrosheet gamelogs   FanGraphs      Statcast (pybaseball)
 | `data/processed/statcast_player/`  | Statcast individual batter and pitcher stats (via pybaseball) |
 | `data/processed/vegas/`            | `vegas_YYYY.parquet` (implied probabilities from money lines) |
 | `data/processed/weather/`          | `by_park_date.parquet` (historical temp, wind, humidity per game) |
-| `data/processed/features/`         | `features_YYYY.parquet` (118-feature matrix per season)    |
+| `data/processed/features/`         | `features_YYYY.parquet` (119-feature matrix per season), `features_spring_YYYY.parquet` (spring training) |
 | `data/models/`                     | Trained model artifacts + HPO results + CV summaries       |
 | `data/processed/predictions/`      | Immutable prediction snapshots (Parquet, by season)        |
 | `data/processed/drift/`            | Drift monitoring logs (`run_metrics_YYYY.parquet`, global) |
@@ -623,9 +634,13 @@ MLB Stats API     Retrosheet gamelogs   FanGraphs      Statcast (pybaseball)
 import pandas as pd
 from pathlib import Path
 
-# Load all predictions
+# Load all predictions (features_*.parquet + features_spring_*.parquet)
 frames = [pd.read_parquet(f) for f in sorted(Path("data/processed/features").glob("features_*.parquet"))]
 df = pd.concat(frames, ignore_index=True)
+
+# Backward compat: ensure is_spring exists (0.0 for older feature files)
+if "is_spring" not in df.columns:
+    df["is_spring"] = 0.0
 
 from winprob.model.artifacts import latest_artifact, load_model
 from winprob.model.train import _predict_proba
@@ -725,7 +740,7 @@ mlb-winprob/
 │   │   ├── park_factors.py
 │   │   ├── bullpen.py       # Bullpen usage and ERA proxy features
 │   │   ├── lineup.py        # Lineup continuity features
-│   │   └── builder.py       # Assembles 118-feature matrix
+│   │   └── builder.py       # Assembles 119-feature matrix
 │   ├── model/           # Model training and evaluation
 │   │   ├── train.py     # LR + LightGBM + XGBoost + CatBoost + MLP + stacked
 │   │   ├── evaluate.py
@@ -757,7 +772,8 @@ mlb-winprob/
 │   ├── ingest_vegas.py                 # Vegas money-line odds → implied probabilities
 │   ├── ingest_weather.py               # Open-Meteo historical weather backfill
 │   ├── ingest_all.py                   # Orchestrate all ingestion steps
-│   ├── build_features.py               # Build 118-feature matrices (historical)
+│   ├── build_features.py               # Build 119-feature matrices (historical)
+│   ├── build_spring_features.py        # Build spring training feature matrices
 │   ├── build_features_2026.py          # Build 2026 pre-season feature matrix
 │   ├── train_model.py                  # Optuna HPO + expanding-window CV + 6 production models
 │   ├── feature_importance.py           # SHAP-based feature importance analysis
@@ -786,7 +802,7 @@ mlb-winprob/
 │   │   ├── statcast_player/    # Statcast batter/pitcher individual stats
 │   │   ├── vegas/              # Implied probabilities from money lines
 │   │   ├── weather/            # Open-Meteo historical weather cache
-│   │   ├── features/
+│   │   ├── features/        # features_YYYY.parquet, features_spring_YYYY.parquet
 │   │   ├── predictions/
 │   │   └── drift/
 │   └── models/

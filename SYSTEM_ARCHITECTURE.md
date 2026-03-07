@@ -10,13 +10,14 @@
    - Retrosheet downloader (Chadwick primary / retrosheet.org ZIP fallback)
    - FanGraphs team metrics (via `pybaseball`)
    - Individual pitcher stats (MLB Stats API)
+   - Spring training schedule scores (MLB Stats API)
 
 2. **Processing Layer** — normalize and link raw data
    - Schedule normalization
    - Retrosheet GL parsing
    - Crosswalk builder (Retrosheet → MLB `game_pk`)
 
-3. **Feature Layer** — deterministic 66-feature matrix per game
+3. **Feature Layer** — deterministic 119-feature matrix per game
    - Elo ratings (sequential, cross-season)
    - Multi-window rolling stats (15 / 30 / 60 games)
    - EWMA rolling stats (span=20)
@@ -25,11 +26,16 @@
    - FanGraphs team advanced metrics (prior-season wOBA, FIP, xFIP, …)
    - Park run factors
    - Differential features
+   - Spring training features (from schedule scores + prior-season state)
+   - Game type indicator (is_spring)
+   - Spring training feature builder (schedule scores + prior-season team state)
 
-4. **Model Layer** — four trained classifiers with Platt calibration
+4. **Model Layer** — six trained classifiers with probability calibration (isotonic for tree models, Platt for linear/neural)
    - Logistic regression (interpretable baseline)
    - LightGBM (Optuna-tuned gradient boosting)
    - XGBoost (Optuna-tuned gradient boosting)
+   - CatBoost (Optuna-tuned gradient boosting)
+   - MLP (multi-layer perceptron neural network)
    - Stacked ensemble (meta-logistic on base-model probabilities)
 
 5. **Scoring Layer** — immutable prediction snapshots
@@ -71,8 +77,11 @@ schedule + gamelogs
    └─► data/processed/crosswalk/game_id_map_YYYY.parquet
 
 crosswalk + gamelogs + pitcher_stats + fangraphs
-   └─► data/processed/features/features_YYYY.parquet   (66 features, historical)
+   └─► data/processed/features/features_YYYY.parquet   (119 features, historical)
    └─► data/processed/features/features_2026.parquet   (pre-season, from team state)
+
+schedule (spring training scores) + prior-season features
+   └─► data/processed/features/features_spring_YYYY.parquet  (spring training)
 
 features ──► model training ──► data/models/{type}_v3_train{season}/
 
@@ -84,12 +93,13 @@ features + model
 ## 2.2 Daily automated update (`scripts/update_daily.sh`)
 
 ```text
-1. ingest_schedule.py  (current season)
+1. ingest_schedule.py  (regular + spring training)
 2. ingest_retrosheet_gamelogs.py  (current season)
 3. build_crosswalk.py  (current season)
 4. build_features.py  (current season)
-5. build_features_2026.py  (update 2026 pre-season state)
-6. kill server → start fresh uvicorn instance
+5. build_spring_features.py  (current season)
+6. build_features_2026.py  (update 2026 pre-season state)
+7. kill server → start fresh uvicorn instance
 ```
 
 ---
@@ -149,12 +159,13 @@ in sequence and exits nonzero on any failure.
 - `team_stats.py` — rolling windows (15/30/60 games), EWMA, home/away splits, streaks, rest
 - `pitcher_stats.py` — gamelog-based pitcher ERA assembly
 - `park_factors.py` — median runs-per-game park factor from historical gamelogs
-- `builder.py` — assembles the 66-feature matrix and saves per-season Parquet
+- `builder.py` — assembles the 119-feature matrix with is_spring indicator and saves per-season Parquet
 
 ## 4.6 `src/winprob/model`
 
-- `train.py` — logistic, LightGBM, XGBoost, stacked ensemble; Platt calibration;
-  time-weighted sample weights; Optuna HPO; expanding-window cross-validation
+- `train.py` — logistic, LightGBM, XGBoost, CatBoost, MLP, stacked ensemble; calibration (isotonic for tree models, Platt for linear/neural);
+  time-weighted sample weights; Optuna HPO; expanding-window cross-validation;
+  spring training weighting; pre-training data validation; combined regular + spring feature loading
 - `evaluate.py` — Brier score, accuracy, calibration error
 - `artifacts.py` — save / load model artifacts (joblib + JSON metadata)
 
@@ -173,7 +184,7 @@ in sequence and exits nonzero on any failure.
   upsets, CV summary; SHAP attribution on game detail
 - `data_cache.py` — loads all feature Parquet files and the production model
   once at startup; normalizes date types; pre-computes probabilities for all games
-- `templates/` — Jinja2 HTML templates (`index.html`, `game.html`, `season_2026.html`)
+- `templates/` — Jinja2 HTML templates (`index.html`, `game.html`, `season_2026.html`, `chat.html`, `odds_hub.html`, `ev_calculator.html`)
 
 ---
 

@@ -74,7 +74,7 @@ log "============================================================"
 # 1. Refresh current-season schedule
 #    (picks up any rescheduled or added games)
 # ---------------------------------------------------------------------------
-run "Ingest $YEAR schedule" \
+run "Ingest $YEAR schedule (regular + spring training)" \
     "$PYTHON" scripts/ingest_schedule.py --seasons "$YEAR" --refresh-mlbapi
 
 # ---------------------------------------------------------------------------
@@ -97,7 +97,13 @@ run "Build $YEAR features" \
     "$PYTHON" scripts/build_features.py --seasons "$YEAR"
 
 # ---------------------------------------------------------------------------
-# 5. Rebuild 2026 pre-season features
+# 5. Rebuild spring training features for current season
+# ---------------------------------------------------------------------------
+run "Build $YEAR spring training features" \
+    "$PYTHON" scripts/build_spring_features.py --seasons "$YEAR"
+
+# ---------------------------------------------------------------------------
+# 6. Rebuild 2026 pre-season features
 #    During the 2026 season this updates predictions game-by-game using the
 #    end-of-last-game team state; before the season it uses 2025 end-of-year.
 # ---------------------------------------------------------------------------
@@ -105,7 +111,7 @@ run "Build 2026 pre-season features" \
     "$PYTHON" scripts/build_features_2026.py
 
 # ---------------------------------------------------------------------------
-# 6. Restart the web server
+# 7. Restart the web server
 #    Kills the existing process (if any) then starts a new one in the
 #    background, redirecting output to logs/server.log.
 # ---------------------------------------------------------------------------

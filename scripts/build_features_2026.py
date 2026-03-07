@@ -318,11 +318,12 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
         h_pit_whip = _resolve(h, "pit_whip")
         a_pit_whip = _resolve(a, "pit_whip")
 
+        game_type = g.get("game_type", "R")
         row: dict = {
             "game_pk": int(g["game_pk"]),
             "date": pd.to_datetime(g["game_date_local"]).date(),
             "season": 2026,
-            "game_type": g.get("game_type", "R"),
+            "game_type": game_type,
             "home_mlb_id": int(g["home_mlb_id"]),
             "away_mlb_id": int(g["away_mlb_id"]),
             "home_retro": h_code,
@@ -464,6 +465,7 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
             "game_temp_f": 72.0,
             "game_wind_mph": 5.0,
             "game_humidity": 50.0,
+            "is_spring": 1.0 if game_type == "S" else 0.0,
         }
         row["feature_hash"] = _feature_hash(row)
         rows.append(row)
