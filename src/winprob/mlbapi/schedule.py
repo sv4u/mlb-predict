@@ -63,9 +63,7 @@ async def schedule_bounds(
     raw = await client.get_json("schedule", params)
     ds = [d.get("date") for d in raw.get("dates", []) if d.get("date")]
     if not ds:
-        raise RuntimeError(
-            f"No dates returned for season={season} gameType={game_type}"
-        )
+        raise RuntimeError(f"No dates returned for season={season} gameType={game_type}")
     ds_sorted = sorted(ds)
     return (date.fromisoformat(ds_sorted[0]), date.fromisoformat(ds_sorted[-1]))
 

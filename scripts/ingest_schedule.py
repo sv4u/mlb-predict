@@ -154,9 +154,7 @@ async def _fetch_game_type(
 ) -> pd.DataFrame:
     """Fetch all games for one (season, game_type) pair."""
     try:
-        start, end = await schedule_bounds(
-            client, season=season, game_type=game_type
-        )
+        start, end = await schedule_bounds(client, season=season, game_type=game_type)
     except RuntimeError:
         log.info("No games for season=%d gameType=%s — skipping", season, game_type)
         return pd.DataFrame()
