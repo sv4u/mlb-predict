@@ -60,6 +60,8 @@ services:
         condition: service_healthy
     environment:
       OLLAMA_HOST: "http://ollama:11434"
+      OLLAMA_CHAT_MODEL: "${OLLAMA_CHAT_MODEL:-llama3.1:8b}"
+      OLLAMA_CHAT_MODEL_ALT: "${OLLAMA_CHAT_MODEL_ALT:-mistral:7b}"
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
