@@ -74,6 +74,12 @@ def test_sitemap_contains_game_detail_path(sitemap_html: str) -> None:
     assert "/game/{game_pk}" in sitemap_html or "/game/" in sitemap_html
 
 
+def test_sitemap_contains_mcp_path(sitemap_html: str) -> None:
+    """The sitemap must reference the MCP server path."""
+    assert "/mcp" in sitemap_html
+    assert "MCP" in sitemap_html or "Model Context Protocol" in sitemap_html
+
+
 def test_sitemap_has_method_badges(sitemap_html: str) -> None:
     """The sitemap must contain GET and POST method badges."""
     assert "method-get" in sitemap_html
@@ -125,6 +131,17 @@ def test_xml_sitemap_route_registered() -> None:
 
     paths = {route.path for route in app.routes if hasattr(route, "path")}  # type: ignore[union-attr]
     assert "/sitemap.xml" in paths
+
+
+def test_mcp_mount_registered() -> None:
+    """The /mcp mount must be registered for the MCP Streamable HTTP server."""
+    from starlette.routing import Mount
+
+    from winprob.app.main import app
+
+    mounts = [r for r in app.routes if isinstance(r, Mount)]
+    mcp_mounts = [m for m in mounts if m.path == "/mcp"]
+    assert len(mcp_mounts) == 1
 
 
 # ---------------------------------------------------------------------------

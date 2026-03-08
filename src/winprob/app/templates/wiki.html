@@ -201,6 +201,7 @@
     </li>
     <li><a href="#predictions">Predictions &amp; Drift</a></li>
     <li><a href="#errors">Error Handling</a></li>
+    <li><a href="#mcp-server">MCP Server</a></li>
     <li><a href="#admin-console">Admin Console</a>
       <ul>
         <li><a href="#admin-pipelines">Pipeline Controls</a></li>
@@ -1232,6 +1233,55 @@ where spring_factor = 0.25 if is_spring == 1.0, else 1.0</code></pre>
   <code>>>> df.shape</code><br>
   <code>(2430, 106)</code>
 </div>
+
+<!-- ================================================================== -->
+<h2 id="mcp-server">MCP Server</h2>
+
+<p>
+  The <strong>Model Context Protocol (MCP)</strong> server exposes the same data and tools as the chat assistant
+  over Streamable HTTP, so you can use Cursor (or other MCP clients) to query predictions, standings, SHAP
+  explanations, odds, and model info without relying on the LLM chat. The MCP server runs in the same process
+  as the web UI and shares the same in-memory data and model.
+</p>
+
+<p>
+  <strong>Endpoint:</strong> The MCP transport is mounted at <code>/mcp</code>. When the dashboard is running,
+  the full URL is <code>http://&lt;host&gt;:&lt;port&gt;/mcp</code> (e.g. <code>http://localhost:30087/mcp</code> or
+  <code>http://192.168.1.100:30087/mcp</code> when accessing from another device on your home network).
+</p>
+
+<div class="info-box">
+  <strong>Home network access:</strong> To allow connections from other devices (e.g. your laptop running Cursor),
+  start the server with <code>--host 0.0.0.0</code>, or set <code>WINPROB_LISTEN_ALL=1</code> so the default host
+  is <code>0.0.0.0</code>. In Docker, the server already binds to all interfaces. Use your machine’s LAN IP and the
+  exposed port (e.g. <code>http://192.168.1.100:30087/mcp</code>) in Cursor’s MCP settings.
+</div>
+
+<h3>Configuring Cursor</h3>
+<p>
+  In Cursor, add an MCP server with the Streamable HTTP URL of your running dashboard, for example
+  <code>http://localhost:30087/mcp</code> (local) or <code>http://&lt;your-machine-ip&gt;:30087/mcp</code> (home
+  network).
+  Cursor will discover the tools and you can call them directly from the AI without using the chat UI.
+</p>
+
+<h3>Available tools</h3>
+<p>The MCP server exposes these tools (same as the chat assistant):</p>
+<ul>
+  <li><strong>query_predictions</strong> — Find game predictions by team (Retrosheet code), season, or date.</li>
+  <li><strong>explain_prediction</strong> — SHAP breakdown and key stats for a game by <code>game_pk</code>.</li>
+  <li><strong>compare_models</strong> — Cross-validation summary for all models.</li>
+  <li><strong>get_team_stats</strong> — Batting and pitching stats for all teams in a season.</li>
+  <li><strong>get_standings</strong> — Predicted and actual division standings.</li>
+  <li><strong>find_upsets</strong> — Biggest upsets (favorites that lost); optional <code>season</code>,
+    <code>min_prob</code>, <code>limit</code>.</li>
+  <li><strong>get_drift_metrics</strong> — Prediction drift vs previous snapshot.</li>
+  <li><strong>get_model_info</strong> — Description of a model type (e.g. stacked, lightgbm).</li>
+  <li><strong>describe_feature</strong> — Feature or sabermetric term description.</li>
+  <li><strong>get_season_summary</strong> — Available seasons and active model.</li>
+  <li><strong>find_ev_bets</strong> — Positive expected value bets vs the model.</li>
+  <li><strong>get_live_odds</strong> — Live moneyline odds (when ODDS_API_KEY is set).</li>
+</ul>
 
 <!-- ================================================================== -->
 <h2 id="architecture">System Architecture</h2>

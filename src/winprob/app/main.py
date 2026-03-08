@@ -128,7 +128,21 @@ async def _lifespan(app: FastAPI):
         app.state._grpc_server = None
 
 
-app = FastAPI(title="MLB Win Probability", version="3.0", lifespan=_lifespan)
+# MCP server (Streamable HTTP) — same process as web UI; mount at /mcp for Cursor/home network
+from winprob.mcp import create_mcp_app
+
+_mcp_app = create_mcp_app()
+
+
+@asynccontextmanager
+async def _combined_lifespan(app: FastAPI):
+    """Run app lifespan then MCP server lifespan so /mcp tools have access to data."""
+    async with _lifespan(app):
+        async with _mcp_app.lifespan(app):
+            yield
+
+
+app = FastAPI(title="MLB Win Probability", version="3.0", lifespan=_combined_lifespan)
 app.add_middleware(TimingMiddleware)
 
 
@@ -149,6 +163,7 @@ templates = Jinja2Templates(directory=str(_BASE / "templates"))
 _static = _BASE / "static"
 _static.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_static)), name="static")
+app.mount("/mcp", _mcp_app)
 
 
 _DEFAULT_MODEL_TYPE = "stacked"

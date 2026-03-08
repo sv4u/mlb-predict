@@ -38,7 +38,14 @@ sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent / "src
 def main() -> None:
     """Parse arguments, configure logging, and start the Uvicorn server."""
     ap = argparse.ArgumentParser(description="Start the MLB Win Probability dashboard.")
-    ap.add_argument("--host", default="127.0.0.1")
+    default_host = (
+        "0.0.0.0" if os.environ.get("WINPROB_LISTEN_ALL", "").strip() == "1" else "127.0.0.1"
+    )
+    ap.add_argument(
+        "--host",
+        default=default_host,
+        help="Bind address (default: 127.0.0.1; set WINPROB_LISTEN_ALL=1 for 0.0.0.0 to allow MCP/dashboard from home network).",
+    )
     ap.add_argument("--port", type=int, default=30087)
     ap.add_argument(
         "--no-grpc",
