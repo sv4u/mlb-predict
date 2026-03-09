@@ -236,6 +236,37 @@ def test_compute_predicted_standings_wrong_season_returns_empty(
     assert result.empty
 
 
+def test_compute_predicted_standings_game_type_s_returns_empty_without_spring_data(
+    mini_features_df: pd.DataFrame,
+) -> None:
+    """When game_type='S' and features have no game_type column, returns empty."""
+    result = compute_predicted_standings(mini_features_df, season=2026, game_type="S")
+    assert result.empty
+
+
+def test_compute_predicted_standings_game_type_r_filters_to_regular_only() -> None:
+    """When game_type='R', only rows with game_type R are included."""
+    df = pd.DataFrame(
+        {
+            "game_pk": [1, 2],
+            "season": [2026, 2026],
+            "date": pd.to_datetime(["2026-04-01", "2026-03-15"]).date,
+            "home_retro": ["BOS", "BOS"],
+            "away_retro": ["NYA", "NYA"],
+            "home_mlb_id": [111, 111],
+            "away_mlb_id": [147, 147],
+            "home_win": [np.nan, np.nan],
+            "prob": [0.6, 0.5],
+            "game_type": ["R", "S"],
+        }
+    )
+    result = compute_predicted_standings(df, season=2026, game_type="R")
+    assert not result.empty
+    assert len(result) == 2
+    bos = result[result["retro_code"] == "BOS"].iloc[0]
+    assert bos["pred_total_games"] == 1
+
+
 def test_compute_predicted_standings_prob_aggregation(mini_features_df: pd.DataFrame) -> None:
     """Verify specific probability aggregation for one team.
 

@@ -609,59 +609,13 @@ async def api_cv_summary(request: Request) -> list[dict]:
     return []
 
 
-@app.get("/api/standings", response_model=None)
-async def api_standings(
-    request: Request,
-    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
-) -> dict | JSONResponse:
-    """Return predicted vs actual standings grouped by division.
-
-    Predicted standings are computed from the per-game win probabilities
-    in the features cache.  Actual standings are fetched live from the
-    MLB Stats API when available.
-    """
-    stubs = _stubs(request)
-    if stubs:
-        try:
-            from winprob.grpc.generated.winprob.v1 import standings_pb2
-
-            r = await stubs["standings"].GetStandings(
-                standings_pb2.GetStandingsRequest(season=season)
-            )
-            return _grpc_dict(r)
-        except grpc.RpcError as e:
-            return _grpc_error_to_response(e)
-    if not is_ready():
-        return _not_ready_json()
-    logger.debug("GET /api/standings season=%d", season)
-    from winprob.mlbapi.client import MLBAPIClient
-    from winprob.mlbapi.standings import fetch_standings
-
-    with timed_operation("predicted_standings"):
-        df = get_features()
-        pred_df = compute_predicted_standings(df, season=season)
-
-    actual_df = pd.DataFrame()
-    try:
-        async with timed_operation("mlb_api_standings"):
-            async with MLBAPIClient() as client:
-                actual_df = await fetch_standings(client, season=season)
-    except Exception as exc:
-        logger.warning("Could not fetch live standings for season=%d: %s", season, exc)
-
-    # Suppress actual data when season hasn't started (all teams 0-0)
-    season_started = not actual_df.empty and actual_df["wins"].sum() + actual_df["losses"].sum() > 0
-
-    if not pred_df.empty and season_started:
-        standings = merge_predicted_actual(pred_df, actual_df)
-    elif not pred_df.empty:
-        standings = pred_df
-    else:
-        return {"season": season, "divisions": [], "league_leaders": {}}
-
+def _build_standings_payload(
+    standings: pd.DataFrame,
+    season: int,
+) -> tuple[list[dict], dict]:
+    """Build divisions list and league_leaders from a standings DataFrame."""
     league_leaders = compute_league_leaders(standings)
-
-    divisions: list[dict] = []
+    divisions = []
     for div_id in DIVISION_DISPLAY_ORDER:
         div_info = DIVISIONS.get(div_id, {})
         div_df = standings[standings["division_id"] == div_id].sort_values(
@@ -670,10 +624,9 @@ async def api_standings(
         )
         if div_df.empty:
             continue
-
-        teams: list[dict] = []
+        teams = []
         for _, row in div_df.iterrows():
-            team_entry: dict = {
+            team_entry = {
                 "retro_code": row.get("retro_code", ""),
                 "mlb_id": int(row.get("mlb_id", 0)),
                 "team_name": TEAM_NAMES.get(row.get("retro_code", ""), row.get("team_name", "")),
@@ -701,7 +654,6 @@ async def api_standings(
                     }
                 )
             teams.append(team_entry)
-
         divisions.append(
             {
                 "division_id": div_id,
@@ -710,12 +662,88 @@ async def api_standings(
                 "teams": teams,
             }
         )
+    return divisions, league_leaders
 
-    return {
+
+@app.get("/api/standings", response_model=None)
+async def api_standings(
+    request: Request,
+    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
+    include_spring: Annotated[bool, Query(description="Include spring training standings subsection")] = False,
+) -> dict | JSONResponse:
+    """Return predicted vs actual standings grouped by division.
+
+    Main standings are regular-season only. Actual standings are from the MLB Stats API.
+    When include_spring=true, also returns spring training predicted standings (no actuals).
+    """
+    stubs = _stubs(request)
+    if stubs:
+        try:
+            from winprob.grpc.generated.winprob.v1 import standings_pb2
+
+            r = await stubs["standings"].GetStandings(
+                standings_pb2.GetStandingsRequest(season=season)
+            )
+            out = _grpc_dict(r)
+            if include_spring:
+                with timed_operation("predicted_standings_spring"):
+                    df = get_features()
+                    pred_spring = compute_predicted_standings(df, season=season, game_type="S")
+                if not pred_spring.empty:
+                    divs_spring, leaders_spring = _build_standings_payload(pred_spring, season)
+                    out["spring"] = {"divisions": divs_spring, "league_leaders": leaders_spring}
+            return out
+        except grpc.RpcError as e:
+            return _grpc_error_to_response(e)
+    if not is_ready():
+        return _not_ready_json()
+    logger.debug("GET /api/standings season=%d include_spring=%s", season, include_spring)
+    from winprob.mlbapi.client import MLBAPIClient
+    from winprob.mlbapi.standings import fetch_standings
+
+    with timed_operation("predicted_standings"):
+        df = get_features()
+        pred_df = compute_predicted_standings(df, season=season, game_type="R")
+
+    actual_df = pd.DataFrame()
+    try:
+        async with timed_operation("mlb_api_standings"):
+            async with MLBAPIClient() as client:
+                actual_df = await fetch_standings(client, season=season)
+    except Exception as exc:
+        logger.warning("Could not fetch live standings for season=%d: %s", season, exc)
+
+    # Suppress actual data when season hasn't started (all teams 0-0)
+    season_started = not actual_df.empty and actual_df["wins"].sum() + actual_df["losses"].sum() > 0
+
+    if not pred_df.empty and season_started:
+        standings = merge_predicted_actual(pred_df, actual_df)
+    elif not pred_df.empty:
+        standings = pred_df
+    else:
+        out = {"season": season, "divisions": [], "league_leaders": {}}
+        if include_spring:
+            with timed_operation("predicted_standings_spring"):
+                pred_spring = compute_predicted_standings(df, season=season, game_type="S")
+            if not pred_spring.empty:
+                divs_spring, leaders_spring = _build_standings_payload(pred_spring, season)
+                out["spring"] = {"divisions": divs_spring, "league_leaders": leaders_spring}
+        return out
+
+    divisions, league_leaders = _build_standings_payload(standings, season)
+    out = {
         "season": season,
+        "game_type": "regularSeason",
         "divisions": divisions,
         "league_leaders": league_leaders,
     }
+    if include_spring:
+        with timed_operation("predicted_standings_spring"):
+            pred_spring = compute_predicted_standings(df, season=season, game_type="S")
+        if not pred_spring.empty:
+            divs_spring, leaders_spring = _build_standings_payload(pred_spring, season)
+            out["spring"] = {"divisions": divs_spring, "league_leaders": leaders_spring}
+    return out
 
 
 @app.get("/api/team-stats", response_model=None)

@@ -74,15 +74,30 @@ RETRO_TO_DIVISION: dict[str, int] = {v[1]: v[0] for v in TEAM_DIVISION_MAP.value
 DIVISION_DISPLAY_ORDER: list[int] = [201, 202, 200, 204, 205, 203]
 
 
-def compute_predicted_standings(features_df: pd.DataFrame, season: int = 2026) -> pd.DataFrame:
+def compute_predicted_standings(
+    features_df: pd.DataFrame,
+    season: int = 2026,
+    *,
+    game_type: str = "R",
+) -> pd.DataFrame:
     """Aggregate per-game win probabilities into expected team records.
 
     For each team, sums the predicted P(win) across all games to get
     expected wins.  A team's P(win) in a game is:
       - prob      when the team is the home team
       - 1 - prob  when the team is the away team
+
+    game_type: "R" = regular season only, "S" = spring training only.
+    Uses the "game_type" column in features_df when present; default "R".
     """
     df = features_df[features_df["season"] == season].copy()
+    if df.empty:
+        return pd.DataFrame()
+
+    if "game_type" in df.columns:
+        df = df[df["game_type"] == game_type].copy()
+    elif game_type != "R":
+        return pd.DataFrame()
     if df.empty:
         return pd.DataFrame()
 
