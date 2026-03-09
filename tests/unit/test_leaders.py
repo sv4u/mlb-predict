@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from winprob.mlbapi.leaders import (
     HITTING_LEADER_CATEGORIES,
     PITCHING_LEADER_CATEGORIES,

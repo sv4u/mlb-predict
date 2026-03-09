@@ -506,7 +506,9 @@ async def api_game_play_by_play(game_pk: int) -> dict | JSONResponse:
                 data = await fetch_game_feed(client, game_pk=game_pk)
         return data
     except MLBNotFoundError:
-        return JSONResponse({"error": "Game not found or no play-by-play available."}, status_code=404)
+        return JSONResponse(
+            {"error": "Game not found or no play-by-play available."}, status_code=404
+        )
     except Exception as exc:
         logger.warning("Play-by-play fetch failed for game_pk=%d: %s", game_pk, exc)
         return JSONResponse(
@@ -887,7 +889,12 @@ async def api_leaders(
                     limit=limit,
                     stat_group=stat_group,
                 )
-        return {"season": season, "league_id": league_id, "stat_group": stat_group, "leader_tables": tables}
+        return {
+            "season": season,
+            "league_id": league_id,
+            "stat_group": stat_group,
+            "leader_tables": tables,
+        }
     except Exception as exc:
         logger.warning("Leaders fetch failed season=%d: %s", season, exc)
         return {

@@ -36,8 +36,12 @@ def _normalize_play(play: dict[str, Any], index: int) -> dict[str, Any]:
         "batter_name": (batter.get("fullName") or batter.get("name") or "").strip(),
         "pitcher_id": pitcher.get("id"),
         "pitcher_name": (pitcher.get("fullName") or pitcher.get("name") or "").strip(),
-        "home_score": about.get("homeScore") if isinstance(about.get("homeScore"), (int, float)) else None,
-        "away_score": about.get("awayScore") if isinstance(about.get("awayScore"), (int, float)) else None,
+        "home_score": about.get("homeScore")
+        if isinstance(about.get("homeScore"), (int, float))
+        else None,
+        "away_score": about.get("awayScore")
+        if isinstance(about.get("awayScore"), (int, float))
+        else None,
     }
 
 
@@ -66,12 +70,24 @@ def _game_info_from_feed(raw: dict[str, Any]) -> dict[str, Any]:
         "game_pk": game,
         "game_date": datetime_info.get("date", ""),
         "status": status.get("detailedState", ""),
-        "home_team_id": (teams.get("home") or {}).get("id") if isinstance(teams.get("home"), dict) else None,
-        "home_team_name": (teams.get("home") or {}).get("name", "") if isinstance(teams.get("home"), dict) else "",
-        "away_team_id": (teams.get("away") or {}).get("id") if isinstance(teams.get("away"), dict) else None,
-        "away_team_name": (teams.get("away") or {}).get("name", "") if isinstance(teams.get("away"), dict) else "",
-        "home_score": (teams_box.get("home") or {}).get("teamStats", {}).get("runs") if isinstance(teams_box.get("home"), dict) else None,
-        "away_score": (teams_box.get("away") or {}).get("teamStats", {}).get("runs") if isinstance(teams_box.get("away"), dict) else None,
+        "home_team_id": (teams.get("home") or {}).get("id")
+        if isinstance(teams.get("home"), dict)
+        else None,
+        "home_team_name": (teams.get("home") or {}).get("name", "")
+        if isinstance(teams.get("home"), dict)
+        else "",
+        "away_team_id": (teams.get("away") or {}).get("id")
+        if isinstance(teams.get("away"), dict)
+        else None,
+        "away_team_name": (teams.get("away") or {}).get("name", "")
+        if isinstance(teams.get("away"), dict)
+        else "",
+        "home_score": (teams_box.get("home") or {}).get("teamStats", {}).get("runs")
+        if isinstance(teams_box.get("home"), dict)
+        else None,
+        "away_score": (teams_box.get("away") or {}).get("teamStats", {}).get("runs")
+        if isinstance(teams_box.get("away"), dict)
+        else None,
     }
 
 
@@ -98,10 +114,13 @@ async def fetch_game_feed(
     game_info = _game_info_from_feed(raw)
     # Prefer linescore for final score if present
     linescore = live_data.get("linescore", {}) or {}
-    teams_ls = linescore.get("teams") if isinstance(linescore.get("teams"), dict) else {}
+    teams_ls_raw = linescore.get("teams")
+    teams_ls = teams_ls_raw if isinstance(teams_ls_raw, dict) else {}
     if teams_ls:
-        home_team = teams_ls.get("home") if isinstance(teams_ls.get("home"), dict) else {}
-        away_team = teams_ls.get("away") if isinstance(teams_ls.get("away"), dict) else {}
+        home_raw = teams_ls.get("home")
+        away_raw = teams_ls.get("away")
+        home_team = home_raw if isinstance(home_raw, dict) else {}
+        away_team = away_raw if isinstance(away_raw, dict) else {}
         if "runs" in home_team:
             game_info["home_score"] = home_team.get("runs")
         if "runs" in away_team:

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from winprob.mlbapi.game_feed import _normalize_play, _normalize_plays
 
 
@@ -11,7 +9,14 @@ def test_normalize_play_minimal() -> None:
     """_normalize_play returns expected keys for a minimal play."""
     play = {
         "atBatIndex": 0,
-        "about": {"inning": 1, "halfInning": "Top", "outs": 0, "runs": 0, "homeScore": 0, "awayScore": 0},
+        "about": {
+            "inning": 1,
+            "halfInning": "Top",
+            "outs": 0,
+            "runs": 0,
+            "homeScore": 0,
+            "awayScore": 0,
+        },
         "result": {"description": "Flyout.", "event": "Flyout", "eventType": "out"},
         "matchup": {
             "batter": {"id": 1, "fullName": "Batter One"},

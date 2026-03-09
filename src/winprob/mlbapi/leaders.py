@@ -7,7 +7,7 @@ for full batting/pitching stat tables (with pagination).
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping
+from typing import Any
 
 from .client import MLBAPIClient
 
@@ -53,7 +53,9 @@ def _normalize_leader_entry(entry: dict[str, Any], rank: int, category: str) -> 
         "team_name": (team.get("name") or "").strip(),
         "team_abbrev": (team.get("abbreviation") or "").strip(),
         "value": entry.get("value"),
-        "stat_name": entry.get("stat", {}).get("name") if isinstance(entry.get("stat"), dict) else category,
+        "stat_name": entry.get("stat", {}).get("name")
+        if isinstance(entry.get("stat"), dict)
+        else category,
     }
 
 
@@ -77,7 +79,7 @@ async def fetch_leaders(
         cat_list = categories or PITCHING_LEADER_CATEGORIES
 
     leader_categories = ",".join(cat_list)
-    params: Mapping[str, Any] = {
+    params: dict[str, Any] = {
         "leaderCategories": leader_categories,
         "season": season,
         "limit": max(1, min(limit, 50)),
@@ -91,7 +93,10 @@ async def fetch_leaders(
 
     leaders_list = raw.get("leagueLeaders", []) or []
     if isinstance(leaders_list, dict):
-        leaders_list = [{"leaderCategory": k, "leaders": (v or {}).get("leaders", [])} for k, v in leaders_list.items()]
+        leaders_list = [
+            {"leaderCategory": k, "leaders": (v or {}).get("leaders", [])}
+            for k, v in leaders_list.items()
+        ]
     elif not isinstance(leaders_list, list):
         leaders_list = []
 
@@ -100,9 +105,11 @@ async def fetch_leaders(
             continue
         cat = block.get("leaderCategory", "") or block.get("statGroup", "")
         entries = block.get("leaders", []) or []
-        label = (block.get("leaderCategoryDisplayName") or block.get("leaderCategory") or cat).strip()
+        label = (
+            block.get("leaderCategoryDisplayName") or block.get("leaderCategory") or cat
+        ).strip()
         rows = []
-        for i, e in enumerate(entries[: limit], start=1):
+        for i, e in enumerate(entries[:limit], start=1):
             try:
                 rows.append(_normalize_leader_entry(e, i, cat))
             except Exception as exc:
@@ -150,7 +157,7 @@ async def fetch_player_stats(
     Uses the stats endpoint with stats=season, group=hitting|pitching.
     Returns a list of player rows with person_id, name, team_*, and stat keys.
     """
-    params: Mapping[str, Any] = {
+    params: dict[str, Any] = {
         "stats": "season",
         "group": group,
         "season": season,
@@ -175,9 +182,11 @@ async def fetch_player_stats(
                 continue
             stat = sp.get("stat", {}) or {}
             # MLB Stats API uses "player" (not "person") in stats endpoint splits
-            person = (sp.get("player") or sp.get("person") or {}) if isinstance(
-                sp.get("player") or sp.get("person"), dict
-            ) else {}
+            person = (
+                (sp.get("player") or sp.get("person") or {})
+                if isinstance(sp.get("player") or sp.get("person"), dict)
+                else {}
+            )
             team = (sp.get("team") or {}) if isinstance(sp.get("team"), dict) else {}
             try:
                 result.append(_normalize_player_stat_row(stat, person, team, group))
