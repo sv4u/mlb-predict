@@ -115,6 +115,9 @@
 
     h2 { font-size: 0.95rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
 
+    @media (max-width: 768px) {
+      #playbyplay-content .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-height: 50vh; }
+    }
     @media (max-width: 640px) {
       .matchup { flex-direction: column; }
       .vs-divider { width: 100%; height: 40px; }
@@ -138,6 +141,8 @@
     <a href="/">Home</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
     <a href="/odds">Odds & Bets</a>
     <span class="nav-divider"></span>
     <a href="/wiki">Wiki</a>
@@ -342,6 +347,34 @@
     </div>
   </div>
 
+  <!-- Play-by-play (loaded on demand from MLB API) -->
+  <div class="card" id="playbyplay-card">
+    <h2>Play-by-play <span class="timing-badge" id="timing-pbp" style="display:none"></span></h2>
+    <p class="muted" style="font-size:0.85rem;margin-bottom:1rem">Inning-by-inning events from the MLB Stats API.
+      Available for completed and in-progress games.</p>
+    <div id="playbyplay-load-wrap">
+      <button type="button" class="btn btn-sm sec" id="playbyplay-load-btn" onclick="loadPlayByPlay()">Load
+        play-by-play</button>
+    </div>
+    <div id="playbyplay-error" class="error-msg" style="display:none"></div>
+    <div id="playbyplay-content" style="display:none">
+      <div class="table-wrap" style="max-height: 60vh; overflow-y: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Inning</th>
+              <th>Outs</th>
+              <th>Score</th>
+              <th>Batter / Pitcher</th>
+              <th>Play</th>
+            </tr>
+          </thead>
+          <tbody id="playbyplay-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <footer class="site-footer">
@@ -349,6 +382,8 @@
     <a href="/">Home</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
     <a href="/odds">Odds Hub</a>
     <a href="/wiki">Wiki</a>
   </div>
@@ -592,6 +627,59 @@ async function load() {
     }
   }
 }
+
+      async function loadPlayByPlay() {
+        var btn = document.getElementById('playbyplay-load-btn');
+        var wrap = document.getElementById('playbyplay-load-wrap');
+        var errEl = document.getElementById('playbyplay-error');
+        var content = document.getElementById('playbyplay-content');
+        var tbody = document.getElementById('playbyplay-tbody');
+        var timingEl = document.getElementById('timing-pbp');
+        if (!btn || !wrap || !errEl || !content || !tbody) return;
+        errEl.style.display = 'none';
+        errEl.textContent = '';
+        btn.disabled = true;
+        btn.textContent = 'Loading…';
+        var start = performance.now();
+        try {
+          var r = await fetch('/api/games/' + gamePk + '/play-by-play');
+          var serverMs = r.headers.get('X-Process-Time-Ms');
+          if (serverMs) showTiming('timing-pbp', serverMs, performance.now() - start);
+          var data = await r.json();
+          if (data.error) {
+            errEl.textContent = data.error + (data.detail ? ' ' + data.detail : '');
+            errEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Retry play-by-play';
+            return;
+          }
+          wrap.style.display = 'none';
+          content.style.display = 'block';
+          var plays = data.plays || [];
+          tbody.innerHTML = plays.map(function (p) {
+            var score = (p.away_score != null && p.home_score != null) ? p.away_score + '-' + p.home_score : '—';
+            var batterPitcher = [p.batter_name, p.pitcher_name].filter(Boolean).join(' vs ') || '—';
+            return '<tr>' +
+              '<td>' + (p.inning_label || p.inning + ' ' + (p.half === 'top' ? 'Top' : 'Bottom')) + '</td>' +
+              '<td class="num">' + (p.outs != null ? p.outs : '—') + '</td>' +
+              '<td class="num">' + score + '</td>' +
+              '<td style="font-size:0.82rem">' + batterPitcher + '</td>' +
+              '<td>' + (p.description || p.event || '—') + '</td>' +
+              '</tr>';
+          }).join('');
+          if (plays.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="muted">No play-by-play data for this game.</td></tr>';
+          }
+        } catch (e) {
+          errEl.textContent = 'Failed to load play-by-play: ' + (e.message || String(e));
+          errEl.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Retry play-by-play';
+          return;
+        }
+        btn.disabled = false;
+        btn.textContent = 'Reload play-by-play';
+      }
 
 load();
 </script>

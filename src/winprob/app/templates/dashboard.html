@@ -8,6 +8,18 @@
   <style>
     .pipeline-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-bottom: 1.5rem; }
     @media (max-width: 1024px) { .pipeline-row { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) {
+      .pipeline-card { padding: 1rem; }
+      .pipeline-opts { flex-direction: column; align-items: flex-start; }
+      .pipeline-opts input[type="text"] { width: 100%; max-width: 200px; }
+      .model-grid { grid-template-columns: 1fr; }
+      .model-switch-row { flex-direction: column; align-items: flex-start; }
+      .terminal-input-row { flex-direction: column; }
+      .terminal-output { height: 240px; }
+    }
+    @media (max-width: 480px) {
+      .cv-table-wrap { padding: 0.75rem; overflow-x: auto; }
+    }
     .pipeline-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; position: relative; overflow: hidden; }
     .pipeline-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
     .pipeline-card.ingest::before { background: var(--orange); }
@@ -24,7 +36,7 @@
     .btn-ingest { background: var(--orange); }
     .btn-update { background: var(--accent); }
     .btn-retrain { background: var(--accent2); }
-    .log-box { background: #0a0c12; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.75rem; max-height: 260px; overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.72rem; line-height: 1.6; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+    .log-box { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.75rem; max-height: 260px; overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.72rem; line-height: 1.6; color: var(--code-fg); white-space: pre-wrap; word-break: break-all; }
     .log-box:empty::after { content: 'No log output yet.'; font-style: italic; }
     .model-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
     .model-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.15rem; position: relative; overflow: hidden; }
@@ -43,15 +55,15 @@
     .terminal-section.shell-section::before { background: #22c55e; }
     .terminal-section.repl-section::before { background: #a855f7; }
     .terminal-section h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; }
-    .terminal-output { background: #0a0c12; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.75rem; height: 320px; overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.75rem; line-height: 1.6; color: #d4d4d8; white-space: pre-wrap; word-break: break-all; }
-    .terminal-output .cmd-echo { color: #22c55e; }
-    .terminal-output .exit-ok { color: #22c55e; font-weight: 700; }
-    .terminal-output .exit-err { color: #ef4444; font-weight: 700; }
-    .terminal-output .repl-out { color: #d4d4d8; }
-    .terminal-output .repl-err { color: #ef4444; }
+    .terminal-output { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.75rem; height: 320px; overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.75rem; line-height: 1.6; color: var(--code-fg); white-space: pre-wrap; word-break: break-all; }
+    .terminal-output .cmd-echo { color: var(--green); }
+    .terminal-output .exit-ok { color: var(--green); font-weight: 700; }
+    .terminal-output .exit-err { color: var(--red); font-weight: 700; }
+    .terminal-output .repl-out { color: var(--code-fg); }
+    .terminal-output .repl-err { color: var(--red); }
     .terminal-input-row { display: flex; gap: 0.5rem; }
-    .terminal-input-row input, .terminal-input-row textarea { flex: 1; background: #0a0c12; border: 1px solid var(--border); border-radius: 6px; color: #d4d4d8; padding: 0.5rem 0.75rem; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.78rem; resize: none; }
-    .terminal-input-row input::placeholder, .terminal-input-row textarea::placeholder { color: #52525b; }
+    .terminal-input-row input, .terminal-input-row textarea { flex: 1; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; color: var(--code-fg); padding: 0.5rem 0.75rem; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.78rem; resize: none; }
+    .terminal-input-row input::placeholder, .terminal-input-row textarea::placeholder { color: var(--muted); }
     .terminal-toolbar { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
     .terminal-toolbar button { font-size: 0.72rem; padding: 0.3rem 0.75rem; }
     .btn-shell { background: #22c55e; }
@@ -73,6 +85,8 @@
     <a href="/">All Seasons</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
     <a href="/odds">Odds Hub</a>
     <a href="/wiki">Wiki</a>
     <a href="/dashboard" class="active">Dashboard</a>

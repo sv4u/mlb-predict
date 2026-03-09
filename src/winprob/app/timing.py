@@ -41,7 +41,7 @@ class TimingMiddleware(BaseHTTPMiddleware):
         response.headers["X-Process-Time-Ms"] = f"{elapsed_ms:.2f}"
 
         path = request.url.path
-        if path.startswith("/api/") or path in ("/", "/standings", "/wiki", "/dashboard"):
+        if path.startswith("/api/") or path in ("/", "/standings", "/leaders", "/players", "/wiki", "/dashboard"):
             sub_ops = _request_timings.get()
             if sub_ops:
                 breakdown = ", ".join(f"{op['op']}={op['ms']:.1f}ms" for op in sub_ops)

@@ -327,17 +327,34 @@
 @media (max-width: 768px) {
   .ev-calc {
     grid-template-columns: 1fr;
+    gap: 1.25rem;
   }
   .ev-primary-value {
     font-size: 1.6rem;
   }
+    .ev-input-group,
+    .ev-results-group {
+      min-width: 0;
+    }
 }
 @media (max-width: 480px) {
+  .ev-format-row,
+    .ev-side-row {
+      flex-wrap: wrap;
+    }
   .ev-format-btn {
     font-size: 0.72rem;
-    padding: 0.32rem 0.3rem;
+    padding: 0.35rem 0.4rem;
+      min-height: 44px;
+    }
+    
+    .ev-side-btn {
+      min-height: 44px;
   }
   .ev-kelly-results {
     grid-template-columns: 1fr;
   }
+    .ev-calc-embedded .ev-primary-value {
+      font-size: 1.4rem;
+    }
 }

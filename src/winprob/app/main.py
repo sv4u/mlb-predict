@@ -494,6 +494,27 @@ async def api_game_detail(request: Request, game_pk: int) -> dict | JSONResponse
     }
 
 
+@app.get("/api/games/{game_pk}/play-by-play", response_model=None)
+async def api_game_play_by_play(game_pk: int) -> dict | JSONResponse:
+    """Return play-by-play data for a game from the MLB Stats API (feed/live)."""
+    from winprob.mlbapi.client import MLBAPIClient, MLBNotFoundError
+    from winprob.mlbapi.game_feed import fetch_game_feed
+
+    try:
+        async with timed_operation("mlb_api_game_feed"):
+            async with MLBAPIClient() as client:
+                data = await fetch_game_feed(client, game_pk=game_pk)
+        return data
+    except MLBNotFoundError:
+        return JSONResponse({"error": "Game not found or no play-by-play available."}, status_code=404)
+    except Exception as exc:
+        logger.warning("Play-by-play fetch failed for game_pk=%d: %s", game_pk, exc)
+        return JSONResponse(
+            {"error": "Failed to load play-by-play.", "detail": str(exc)},
+            status_code=502,
+        )
+
+
 @app.get("/api/odds", response_model=None)
 async def api_odds() -> dict:
     """Return all current MLB game odds from The Odds API (cached)."""
@@ -845,6 +866,82 @@ async def api_team_stats(
     return {"season": season, "teams": teams}
 
 
+@app.get("/api/leaders", response_model=None)
+async def api_leaders(
+    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
+    league_id: Annotated[int | None, Query(description="AL=103, NL=104; omit for both")] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    stat_group: Annotated[str, Query(description="hitting or pitching")] = "hitting",
+) -> dict:
+    """Return league leaders (top N per category) for a season from the MLB Stats API."""
+    from winprob.mlbapi.client import MLBAPIClient
+    from winprob.mlbapi.leaders import fetch_leaders
+
+    try:
+        async with timed_operation("mlb_api_leaders"):
+            async with MLBAPIClient() as client:
+                tables = await fetch_leaders(
+                    client,
+                    season=season,
+                    league_id=league_id,
+                    limit=limit,
+                    stat_group=stat_group,
+                )
+        return {"season": season, "league_id": league_id, "stat_group": stat_group, "leader_tables": tables}
+    except Exception as exc:
+        logger.warning("Leaders fetch failed season=%d: %s", season, exc)
+        return {
+            "season": season,
+            "league_id": league_id,
+            "stat_group": stat_group,
+            "leader_tables": [],
+            "error": str(exc),
+        }
+
+
+@app.get("/api/player-stats", response_model=None)
+async def api_player_stats(
+    season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
+    group: Annotated[str, Query(description="hitting or pitching")] = "hitting",
+    league_id: Annotated[int | None, Query(description="AL=103, NL=104; omit for both")] = None,
+    limit: Annotated[int, Query(ge=1, le=250)] = 250,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict:
+    """Return full player stats table (batting or pitching) for a season from the MLB Stats API."""
+    from winprob.mlbapi.client import MLBAPIClient
+    from winprob.mlbapi.leaders import fetch_player_stats
+
+    try:
+        async with timed_operation("mlb_api_player_stats"):
+            async with MLBAPIClient() as client:
+                players = await fetch_player_stats(
+                    client,
+                    season=season,
+                    group=group,
+                    league_id=league_id,
+                    limit=limit,
+                    offset=offset,
+                )
+        return {
+            "season": season,
+            "group": group,
+            "league_id": league_id,
+            "offset": offset,
+            "count": len(players),
+            "players": players,
+        }
+    except Exception as exc:
+        logger.warning("Player stats fetch failed season=%d: %s", season, exc)
+        return {
+            "season": season,
+            "group": group,
+            "league_id": league_id,
+            "count": 0,
+            "players": [],
+            "error": str(exc),
+        }
+
+
 # ---------------------------------------------------------------------------
 # HTML pages
 # ---------------------------------------------------------------------------
@@ -927,6 +1024,18 @@ async def page_standings(request: Request):
     return templates.TemplateResponse("standings.html", _ctx(request))
 
 
+@app.get("/leaders", response_class=HTMLResponse)
+async def page_leaders(request: Request):
+    """League leaders page: top players by hitting/pitching categories (MLB Stats API)."""
+    return templates.TemplateResponse("leaders.html", _ctx(request))
+
+
+@app.get("/players", response_class=HTMLResponse)
+async def page_players(request: Request):
+    """Player stats page: full batting/pitching tables by season (MLB Stats API)."""
+    return templates.TemplateResponse("players.html", _ctx(request))
+
+
 @app.get("/sitemap", response_class=HTMLResponse)
 async def page_sitemap(request: Request):
     """Sitemap page listing all routes in the application."""
@@ -941,6 +1050,8 @@ async def xml_sitemap(request: Request) -> Response:
         "/",
         "/season/2026",
         "/standings",
+        "/leaders",
+        "/players",
         "/odds",
         "/wiki",
         "/dashboard",

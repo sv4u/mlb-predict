@@ -67,7 +67,7 @@
     .tag-green { background: rgba(46,204,113,.15); color: var(--green); }
     .tag-orange { background: rgba(243,156,18,.15); color: var(--orange); }
     .tag-purple { background: rgba(155,89,182,.15); color: var(--purple); }
-    .tag-pink { background: rgba(231,76,142,.15); color: var(--accent2); }
+    .tag-pink { background: var(--accent2-dim); color: var(--accent2); }
 
     .diagram { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.78rem; line-height: 1.8; color: var(--muted); white-space: pre; overflow-x: auto; }
     .diagram .hl { color: var(--accent); font-weight: 600; }
@@ -83,8 +83,17 @@
     html { scroll-behavior: smooth; scroll-padding-top: 80px; }
 
     @media (max-width: 768px) {
-      .wiki-layout { grid-template-columns: 1fr; }
-      .wiki-sidebar { position: static; }
+      .wiki-layout { flex-direction: column; }
+      .wiki-sidebar { position: static; width: 100%; min-width: 0; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+      .content { padding: 1rem 1.25rem; }
+      .content h2 { font-size: 1.25rem; }
+      .content pre { padding: 0.75rem 1rem; font-size: 0.75rem; overflow-x: auto; }
+    }
+    @media (max-width: 480px) {
+      .content { padding: 0.75rem 1rem; }
+      .content h2 { font-size: 1.15rem; }
+      .content h3 { font-size: 1rem; }
+      .feature-table, .perf-table { font-size: 0.8rem; }
     }
   </style>
 </head>
@@ -98,6 +107,8 @@
     <a href="/">All Seasons</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
     <a href="/odds">Odds Hub</a>
     <a href="/wiki" class="active">Wiki</a>
     <a href="/dashboard">Dashboard</a>

@@ -94,6 +94,13 @@
       .home-hero { grid-template-columns: 1fr; }
       .home-hero-cards { grid-template-columns: 1fr; }
       .quick-stats { grid-template-columns: 1fr 1fr; }
+      .home-hero-left { padding: 1.25rem; }
+    }
+    @media (max-width: 480px) {
+      .home-hero-left { padding: 1rem; }
+      .home-hero-left h1 { font-size: 1.25rem; }
+      .hero-card { padding: 1rem; }
+      .quick-stat .qs-val { font-size: 1rem; }
     }
 
     .chart-wrap {
@@ -121,7 +128,7 @@
     .model-card.stacked::before  { background: #e06090; }
     .model-card h4 { font-size: 0.88rem; font-weight: 700; margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.5rem; }
     .model-card .model-tag { font-size: 0.62rem; font-weight: 600; padding: 0.12rem 0.4rem; border-radius: 4px; }
-    .model-card.stacked .model-tag { background: rgba(224,96,144,.15); color: #e06090; }
+    .model-card.stacked .model-tag { background: var(--accent2-dim); color: var(--accent2); }
     .model-card .model-desc { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 0.65rem; }
     .model-facts { list-style: none; font-size: 0.75rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.2rem; }
     .model-facts li::before { content: '›  '; color: var(--accent); font-weight: 700; }
@@ -145,6 +152,8 @@
     <a href="/" class="active">Home</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
     <a href="/odds">Odds & Bets</a>
     <span class="nav-divider"></span>
     <a href="/wiki">Wiki</a>
@@ -422,6 +431,8 @@
     <a href="/">Home</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
     <a href="/odds">Odds Hub</a>
     <a href="/wiki">Wiki</a>
     <a href="/sitemap">Sitemap</a>

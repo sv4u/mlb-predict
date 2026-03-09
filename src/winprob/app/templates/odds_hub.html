@@ -33,9 +33,15 @@
     .odds-board-header .time { font-size: 0.78rem; color: var(--muted); font-family: var(--font-mono); }
 
     @media (max-width: 768px) {
-      .hub-tabs { overflow-x: auto; }
+      .hub-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
       .hub-tab { white-space: nowrap; font-size: 0.82rem; padding: 0.5rem 0.9rem; }
       .ev-summary-cards { grid-template-columns: repeat(2, 1fr); }
+      .hub-header p { max-width: 100%; }
+      .odds-board-header { flex-wrap: wrap; gap: 0.5rem; }
+    }
+    @media (max-width: 480px) {
+      .ev-summary-cards { grid-template-columns: 1fr; }
+      .odds-board-game { margin-bottom: 1rem; }
     }
   </style>
 </head>
@@ -48,6 +54,8 @@
     <a href="/">Home</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
     <a href="/odds" class="active">Odds & Bets</a>
     <span class="nav-divider"></span>
     <a href="/wiki">Wiki</a>
@@ -221,6 +229,8 @@
     <a href="/">Home</a>
     <a href="/season/2026">2026 Season</a>
     <a href="/standings">Standings</a>
+    <a href="/leaders">Leaders</a>
+    <a href="/players">Players</a>
     <a href="/odds">Odds Hub</a>
     <a href="/wiki">Wiki</a>
   </div>

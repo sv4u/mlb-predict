@@ -1,9 +1,221 @@
 /* ===================================================================
    MLB Win Probability — shared JavaScript utilities (v2)
    ===================================================================
-   Sortable tables, hamburger menu, model selector, timezone helpers,
-   loading states, and accessibility improvements.
+   Sortable tables, hamburger menu, theme toggle, model selector,
+   timezone helpers, loading states, and accessibility improvements.
    =================================================================== */
+
+/* ── Theme (Dracula dark / Ayu light) — modes: light, dark, system, time, sun ── */
+var THEME_MODE_KEY = 'mlb-winprob-theme-mode';
+var SUN_COORDS_KEY = 'mlb-winprob-sun-coords';
+var THEME_TIME_DARK_START = 18;
+var THEME_TIME_DARK_END = 6;
+
+function getSystemPrefersDark() {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function getTimeBasedTheme() {
+  var hour = new Date().getHours();
+  if (hour >= THEME_TIME_DARK_END && hour < THEME_TIME_DARK_START) return 'light';
+  return 'dark';
+}
+
+function getSunriseSunsetTheme(lat, lng) {
+  var now = new Date();
+  var sunriseHour = getSunriseHourLocal(now, lat, lng);
+  var sunsetHour = getSunsetHourLocal(now, lat, lng);
+  if (sunriseHour == null || sunsetHour == null) return getTimeBasedTheme();
+  var hour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+  if (hour >= sunriseHour && hour < sunsetHour) return 'light';
+  return 'dark';
+}
+
+function getSunriseHourLocal(date, lat, lng) {
+  var rad = Math.PI / 180;
+  var n = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 86400000);
+  var decl = 23.45 * Math.sin(rad * (360 / 365) * (n + 284));
+  var latRad = lat * rad;
+  var declRad = decl * rad;
+  var cosOmega = -Math.tan(latRad) * Math.tan(declRad) - 0.0145 / (Math.cos(latRad) * Math.cos(declRad));
+  if (cosOmega > 1 || cosOmega < -1) return cosOmega > 0 ? 12 : null;
+  var omega = Math.acos(cosOmega) / rad;
+  var solarHour = 12 - (2 * omega) / 15 / 2;
+  var tzOffsetHours = -date.getTimezoneOffset() / 60;
+  var tzMeridian = tzOffsetHours * 15;
+  var correction = (lng - tzMeridian) / 15;
+  return solarHour + correction;
+}
+
+function getSunsetHourLocal(date, lat, lng) {
+  var rad = Math.PI / 180;
+  var n = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 86400000);
+  var decl = 23.45 * Math.sin(rad * (360 / 365) * (n + 284));
+  var latRad = lat * rad;
+  var declRad = decl * rad;
+  var cosOmega = -Math.tan(latRad) * Math.tan(declRad) - 0.0145 / (Math.cos(latRad) * Math.cos(declRad));
+  if (cosOmega > 1 || cosOmega < -1) return cosOmega > 0 ? 12 : null;
+  var omega = Math.acos(cosOmega) / rad;
+  var solarHour = 12 + (2 * omega) / 15 / 2;
+  var tzOffsetHours = -date.getTimezoneOffset() / 60;
+  var tzMeridian = tzOffsetHours * 15;
+  var correction = (lng - tzMeridian) / 15;
+  return solarHour + correction;
+}
+
+function getStoredThemeMode() {
+  try {
+    var s = localStorage.getItem(THEME_MODE_KEY);
+    if (s === 'light' || s === 'dark' || s === 'system' || s === 'time' || s === 'sun') return s;
+    var legacy = localStorage.getItem('mlb-winprob-theme');
+    if (legacy === 'light' || legacy === 'dark') return legacy;
+  } catch (_) {}
+  return 'system';
+}
+
+function resolveTheme(mode) {
+  if (mode === 'light') return 'light';
+  if (mode === 'dark') return 'dark';
+  if (mode === 'system') return getSystemPrefersDark() ? 'dark' : 'light';
+  if (mode === 'time') return getTimeBasedTheme();
+  if (mode === 'sun') {
+    try {
+      var coords = localStorage.getItem(SUN_COORDS_KEY);
+      if (coords) {
+        var p = JSON.parse(coords);
+        if (typeof p.lat === 'number' && typeof p.lng === 'number') return getSunriseSunsetTheme(p.lat, p.lng);
+      }
+    } catch (_) {}
+    return getTimeBasedTheme();
+  }
+  return 'dark';
+}
+
+function applyResolvedTheme(theme) {
+  var v = theme === 'light' ? 'light' : 'dark';
+  if (document.documentElement) document.documentElement.setAttribute('data-theme', v);
+  updateThemeUI();
+}
+
+function updateThemeUI() {
+  var theme = document.documentElement.getAttribute('data-theme');
+  var mode = getStoredThemeMode();
+  var icon = document.getElementById('theme-current-icon');
+  var select = document.getElementById('theme-mode-select');
+  if (icon) icon.textContent = theme === 'light' ? '☀' : '🌙';
+  if (select && select.value !== mode) select.value = mode;
+}
+
+function setThemeMode(mode) {
+  var v = mode === 'light' || mode === 'dark' || mode === 'system' || mode === 'time' || mode === 'sun' ? mode : 'system';
+  try { localStorage.setItem(THEME_MODE_KEY, v); } catch (_) {}
+  if (v === 'sun') {
+    try {
+      var coords = localStorage.getItem(SUN_COORDS_KEY);
+      if (coords) {
+        applyResolvedTheme(resolveTheme(v));
+        startThemeInterval();
+        updateThemeUI();
+        return;
+      }
+    } catch (_) {}
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        function (pos) {
+          var p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          try { localStorage.setItem(SUN_COORDS_KEY, JSON.stringify(p)); } catch (_) {}
+          applyResolvedTheme(resolveTheme('sun'));
+          startThemeInterval();
+          updateThemeUI();
+        },
+        function () {
+          applyResolvedTheme(getTimeBasedTheme());
+          startThemeInterval();
+          updateThemeUI();
+        },
+        { timeout: 8000, maximumAge: 86400000 }
+      );
+      return;
+    }
+    applyResolvedTheme(getTimeBasedTheme());
+    startThemeInterval();
+  } else {
+    applyResolvedTheme(resolveTheme(v));
+    if (v === 'system') {
+      attachSystemThemeListener();
+      clearThemeInterval();
+    }
+    if (v === 'time' || v === 'sun') startThemeInterval();
+    if (v === 'light' || v === 'dark') clearThemeInterval();
+    updateThemeUI();
+  }
+}
+
+var _themeIntervalId = null;
+var _systemListenerAttached = false;
+
+function clearThemeInterval() {
+  if (_themeIntervalId != null) {
+    clearInterval(_themeIntervalId);
+    _themeIntervalId = null;
+  }
+}
+
+function startThemeInterval() {
+  clearThemeInterval();
+  _themeIntervalId = setInterval(function () {
+    var mode = getStoredThemeMode();
+    if (mode !== 'time' && mode !== 'sun') return;
+    applyResolvedTheme(resolveTheme(mode));
+  }, 60000);
+}
+
+function attachSystemThemeListener() {
+  if (_systemListenerAttached || !window.matchMedia) return;
+  _systemListenerAttached = true;
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+    if (getStoredThemeMode() !== 'system') return;
+    applyResolvedTheme(resolveTheme('system'));
+  });
+}
+
+(function initTheme() {
+  var mode = getStoredThemeMode();
+  var theme = resolveTheme(mode);
+  if (document.documentElement) document.documentElement.setAttribute('data-theme', theme);
+  if (mode === 'system') attachSystemThemeListener();
+  if (mode === 'time' || mode === 'sun') startThemeInterval();
+})();
+
+function injectThemeToggle() {
+  var header = document.querySelector('.site-header');
+  if (!header || document.getElementById('theme-toggle-wrap')) return;
+  var wrap = document.createElement('div');
+  wrap.id = 'theme-toggle-wrap';
+  wrap.className = 'theme-toggle-wrap';
+  var icon = document.createElement('span');
+  icon.id = 'theme-current-icon';
+  icon.className = 'theme-current-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = document.documentElement.getAttribute('data-theme') === 'light' ? '☀' : '🌙';
+  var select = document.createElement('select');
+  select.id = 'theme-mode-select';
+  select.className = 'theme-mode-select';
+  select.setAttribute('aria-label', 'Theme mode');
+  select.innerHTML = '<option value="light">Light (Ayu)</option><option value="dark">Dark (Dracula)</option><option value="system">System</option><option value="time">Time (6pm–6am)</option><option value="sun">Sunrise / sunset</option>';
+  select.value = getStoredThemeMode();
+  select.addEventListener('change', function () { setThemeMode(select.value); });
+  wrap.appendChild(icon);
+  wrap.appendChild(select);
+  header.insertBefore(wrap, header.querySelector('.site-nav') || header.firstChild);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', injectThemeToggle);
+} else {
+  injectThemeToggle();
+}
 
 /* ── Timezone Detection & Formatting ──────────────────────────────── */
 
