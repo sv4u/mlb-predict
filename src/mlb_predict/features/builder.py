@@ -641,6 +641,8 @@ def build_feature_matrix(
     )
     combined["iso_diff"] = combined.get("home_bat_iso", 0.170) - combined.get("away_bat_iso", 0.170)
 
+    combined = combined.copy()
+
     # --- Join crosswalk to get game_pk and MLB team IDs ---------------------
     cw_matched = crosswalk[crosswalk["status"] == "matched"][
         [

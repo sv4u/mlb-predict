@@ -20,6 +20,9 @@ cd /app
 
 export MODEL="${MODEL:-stacked}"
 export PORT="${PORT:-30087}"
+export HOME="${HOME:-/root}"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/matplotlib}"
+mkdir -p "$HOME" "$MPLCONFIGDIR"
 
 # ---------------------------------------------------------------------------
 # Helpers

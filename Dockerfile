@@ -28,7 +28,9 @@
 FROM python:3.11-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    HOME=/root \
+    MPLCONFIGDIR=/tmp/matplotlib
 
 # ---------------------------------------------------------------------------
 # System dependencies

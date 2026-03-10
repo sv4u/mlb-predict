@@ -96,6 +96,7 @@ _CATB_PARAMS: dict[str, Any] = {
     "l2_leaf_reg": 3.0,
     "random_seed": 42,
     "verbose": False,
+    "train_dir": "/tmp/catboost_info",
 }
 
 _MLP_PARAMS: dict[str, Any] = {
@@ -263,7 +264,9 @@ def _build_xgb(params: dict[str, Any] | None = None) -> xgb.XGBClassifier:
 
 
 def _build_catboost(params: dict[str, Any] | None = None) -> CatBoostClassifier:
-    return CatBoostClassifier(**(params or _CATB_PARAMS))
+    p = dict(params or _CATB_PARAMS)
+    p.setdefault("train_dir", "/tmp/catboost_info")
+    return CatBoostClassifier(**p)
 
 
 def _build_mlp(params: dict[str, Any] | None = None) -> Pipeline:
