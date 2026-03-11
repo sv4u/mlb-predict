@@ -135,14 +135,25 @@ async def _lifespan(app: FastAPI):
 
 
 # MCP server (Streamable HTTP) — same process as web UI; mount at /mcp for Cursor/home network
-_mcp_app = create_mcp_app()
+try:
+    _mcp_app = create_mcp_app()
+except Exception as _mcp_exc:
+    logger.warning("MCP app creation failed: %s — running without MCP tools", _mcp_exc)
+    _mcp_app = None
 
 
 @asynccontextmanager
 async def _combined_lifespan(app: FastAPI):
     """Run app lifespan then MCP server lifespan so /mcp tools have access to data."""
     async with _lifespan(app):
-        async with _mcp_app.lifespan(app):
+        if _mcp_app is not None:
+            try:
+                async with _mcp_app.lifespan(app):
+                    yield
+            except Exception as exc:
+                logger.warning("MCP lifespan failed: %s — running without MCP", exc)
+                yield
+        else:
             yield
 
 
@@ -167,7 +178,8 @@ templates = Jinja2Templates(directory=str(_BASE / "templates"))
 _static = _BASE / "static"
 _static.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_static)), name="static")
-app.mount("/mcp", _mcp_app)
+if _mcp_app is not None:
+    app.mount("/mcp", _mcp_app)
 
 
 _DEFAULT_MODEL_TYPE = "stacked"
@@ -220,6 +232,75 @@ def _grpc_error_to_response(exc: grpc.RpcError) -> JSONResponse:
         {"error": exc.details() or str(exc)},
         status_code=500,
     )
+
+
+@app.get("/api/bootstrap-progress", response_model=None)
+async def api_bootstrap_progress() -> dict:
+    """Aggregated bootstrap progress across ingest + retrain phases.
+
+    Accounts for both ingest and retrain even when retrain hasn't started yet,
+    so the progress bar reflects the full bootstrap lifecycle.
+    """
+    from mlb_predict.app.admin import _ingest_commands, _retrain_commands
+
+    ingest = get_state(PipelineKind.INGEST).to_dict()
+    retrain = get_state(PipelineKind.RETRAIN).to_dict()
+
+    ingest_steps = ingest.get("steps", [])
+    retrain_steps = retrain.get("steps", [])
+
+    if not ingest_steps and ingest["status"] == "idle":
+        ingest_steps = [{"description": d, "status": "pending", "elapsed_seconds": None}
+                        for d, _ in _ingest_commands()]
+    if not retrain_steps and retrain["status"] == "idle":
+        retrain_steps = [{"description": d, "status": "pending", "elapsed_seconds": None}
+                         for d, _ in _retrain_commands()]
+
+    all_steps = ingest_steps + retrain_steps
+    total = len(all_steps) if all_steps else 1
+    completed = sum(1 for s in all_steps if s["status"] == "complete")
+    progress_pct = round(completed / total * 100) if total else 0
+
+    completed_durations = [
+        s["elapsed_seconds"] for s in all_steps
+        if s["status"] == "complete" and s["elapsed_seconds"] is not None
+    ]
+    avg_step_duration = (
+        sum(completed_durations) / len(completed_durations) if completed_durations else None
+    )
+    remaining_steps = total - completed
+    if any(s["status"] == "running" for s in all_steps):
+        remaining_steps -= 1
+    eta_seconds = round(avg_step_duration * remaining_steps) if avg_step_duration else None
+
+    if ingest["status"] == "running":
+        current_phase = "ingest"
+    elif retrain["status"] == "running":
+        current_phase = "retrain"
+    elif retrain["status"] in ("success", "failed"):
+        current_phase = "retrain"
+    elif ingest["status"] in ("success", "failed"):
+        current_phase = "ingest"
+    else:
+        current_phase = "waiting"
+
+    failed = ingest["status"] == "failed" or retrain["status"] == "failed"
+    error_detail = ingest.get("error") or retrain.get("error")
+
+    return {
+        "ready": is_ready(),
+        "current_phase": current_phase,
+        "progress_pct": progress_pct,
+        "completed_steps": completed,
+        "total_steps": total,
+        "eta_seconds": eta_seconds,
+        "failed": failed,
+        "error": error_detail,
+        "phases": {
+            "ingest": {**ingest, "steps": ingest_steps},
+            "retrain": {**retrain, "steps": retrain_steps},
+        },
+    }
 
 
 @app.get("/api/health", response_model=None)

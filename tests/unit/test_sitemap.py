@@ -138,14 +138,18 @@ def test_xml_sitemap_route_registered() -> None:
 
 
 def test_mcp_mount_registered() -> None:
-    """The /mcp mount must be registered for the MCP Streamable HTTP server."""
+    """The /mcp mount is registered when MCP is available."""
     from starlette.routing import Mount
 
-    from mlb_predict.app.main import app
+    from mlb_predict.app.main import _mcp_app, app
 
     mounts = [r for r in app.routes if isinstance(r, Mount)]
     mcp_mounts = [m for m in mounts if m.path == "/mcp"]
-    assert len(mcp_mounts) == 1
+
+    if _mcp_app is None:
+        assert len(mcp_mounts) == 0
+    else:
+        assert len(mcp_mounts) == 1
 
 
 # ---------------------------------------------------------------------------

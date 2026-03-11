@@ -3,69 +3,280 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Initializing — MLB Prediction System</title>
+  <title>Initial Setup — MLB Prediction System</title>
   <link rel="stylesheet" href="/static/base.css" />
   <style>
-    .init-container { max-width: 720px; margin: 3rem auto; padding: 0 1.5rem; }
-    .init-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem 2.25rem; position: relative; overflow: hidden; }
-    .init-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent), var(--orange)); }
-    .init-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
-    .init-sub { font-size: 0.88rem; color: var(--muted); line-height: 1.6; margin-bottom: 1.5rem; }
-    .init-status { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; font-size: 0.9rem; }
-    .init-status .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .dot.running { background: var(--orange); animation: dot-pulse 1.5s ease-in-out infinite; }
-    .dot.success { background: var(--green); }
-    .dot.failed { background: var(--red); }
-    .dot.idle { background: var(--muted); }
-    @keyframes dot-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-    .init-step { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.5rem; }
-    .init-elapsed { font-size: 0.78rem; color: var(--muted); margin-bottom: 1rem; }
-    .log-box { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; max-height: 320px; overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.72rem; line-height: 1.6; color: var(--code-fg); white-space: pre-wrap; word-break: break-all; }
-    .log-box:empty::after { content: 'Waiting for pipeline output…'; font-style: italic; }
-    .init-ready { display: none; margin-top: 1.25rem; text-align: center; }
-    .init-ready a { display: inline-block; background: var(--accent); color: #fff; padding: 0.6rem 1.5rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; text-decoration: none; }
-    .init-ready a:hover { opacity: 0.9; }
-    .init-actions { margin-top: 1rem; text-align: center; }
-    .init-actions a { font-size: 0.82rem; color: var(--muted); text-decoration: underline; }
-    .spinner-inline { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 0.5rem; }
+    .boot-container { max-width: 800px; margin: 2rem auto; padding: 0 1.5rem; }
+
+    .boot-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2rem 2.25rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .boot-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--orange), var(--accent));
+      background-size: 200% 100%;
+      animation: gradient-slide 3s linear infinite;
+    }
+    @keyframes gradient-slide {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .boot-card.done::before { background: var(--green); animation: none; }
+    .boot-card.error::before { background: var(--red); animation: none; }
+
+    .boot-title { font-size: 1.4rem; font-weight: 800; margin-bottom: 0.35rem; letter-spacing: -0.01em; }
+    .boot-sub { font-size: 0.88rem; color: var(--muted); line-height: 1.6; margin-bottom: 1.75rem; }
+
+    .progress-section { margin-bottom: 1.75rem; }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 0.5rem;
+    }
+    .progress-pct { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .progress-eta { font-size: 0.82rem; color: var(--muted); font-family: var(--font-mono); }
+    .progress-track {
+      width: 100%;
+      height: 10px;
+      background: var(--border);
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 5px;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+      transition: width 0.6s ease;
+      width: 0%;
+    }
+    .progress-fill.error { background: var(--red); }
+    .progress-step-label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 0.4rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .phase {
+      margin-bottom: 1.5rem;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .phase-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1.15rem;
+      background: var(--card);
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+    .phase-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.15rem 0.55rem;
+      border-radius: var(--radius-xl);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .phase-badge.pending { background: var(--border); color: var(--muted); }
+    .phase-badge.running { background: var(--accent-dim); color: var(--accent); animation: pulse 1.5s infinite; }
+    .phase-badge.complete { background: var(--green-dim); color: var(--green); }
+    .phase-badge.failed { background: var(--red-dim); color: var(--red); }
+
+    .step-list { padding: 0; margin: 0; list-style: none; }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.6rem 1.15rem;
+      border-top: 1px solid var(--border-subtle);
+      font-size: 0.84rem;
+      transition: background var(--transition);
+    }
+    .step-item.running { background: rgba(139, 233, 253, 0.04); }
+    .step-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+    }
+    .step-icon.pending { color: var(--muted); }
+    .step-icon.running { color: var(--accent); }
+    .step-icon.complete { color: var(--green); }
+    .step-icon.failed { color: var(--red); }
+    .step-spinner {
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .step-name { flex: 1; }
+    .step-duration {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      min-width: 50px;
+      text-align: right;
+    }
+
+    .log-section { margin-top: 1.5rem; }
+    .log-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: var(--muted);
+      background: none;
+      border: none;
+      padding: 0.4rem 0;
+      font-family: var(--font-sans);
+      min-height: auto;
+    }
+    .log-toggle:hover { color: var(--text-secondary); }
+    .log-arrow { transition: transform 0.2s; font-size: 0.7rem; }
+    .log-arrow.open { transform: rotate(90deg); }
+    .log-box {
+      display: none;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.85rem 1rem;
+      max-height: 320px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      line-height: 1.7;
+      color: var(--code-fg);
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-top: 0.5rem;
+    }
+    .log-box.open { display: block; }
+    .log-box:empty::after { content: 'Waiting for pipeline output…'; font-style: italic; color: var(--muted); }
+
+    .error-banner {
+      background: var(--red-dim);
+      border: 1px solid rgba(255, 85, 85, 0.25);
+      border-radius: var(--radius);
+      padding: 1rem 1.15rem;
+      margin-top: 1.5rem;
+    }
+    .error-banner-title { font-weight: 700; color: var(--red); font-size: 0.88rem; margin-bottom: 0.35rem; }
+    .error-banner-detail { font-size: 0.82rem; color: var(--red); line-height: 1.6; font-family: var(--font-mono); }
+    .error-banner-help { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.75rem; line-height: 1.6; }
+    .error-banner-help a { color: var(--accent); }
+
+    .ready-banner {
+      display: none;
+      text-align: center;
+      margin-top: 1.75rem;
+      padding: 1.5rem;
+      background: var(--green-dim);
+      border: 1px solid rgba(80, 250, 123, 0.2);
+      border-radius: var(--radius);
+    }
+    .ready-banner p { color: var(--green); font-weight: 700; font-size: 1rem; margin-bottom: 0.75rem; }
+    .ready-banner a {
+      display: inline-block;
+      background: var(--green);
+      color: #1a1a2e;
+      padding: 0.65rem 1.75rem;
+      border-radius: var(--radius);
+      font-weight: 700;
+      font-size: 0.92rem;
+      text-decoration: none;
+      transition: opacity var(--transition);
+    }
+    .ready-banner a:hover { opacity: 0.9; color: #1a1a2e; }
+    .ready-banner .redirect-note { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; }
+
+    .boot-footer {
+      margin-top: 1.25rem;
+      text-align: center;
+      font-size: 0.78rem;
+    }
+    .boot-footer a { color: var(--muted); text-decoration: underline; }
+    .boot-footer a:hover { color: var(--accent); }
+
+    .waiting-state {
+      text-align: center;
+      padding: 2rem 0 1rem;
+      color: var(--muted);
+    }
+    .waiting-state .spinner { margin: 0 auto 0.75rem; }
+    .waiting-state p { font-size: 0.88rem; }
+
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
   </style>
 </head>
 <body>
 <header class="site-header">
-  <a href="/" class="logo">⚾ MLB Prediction System</a>
-  <span class="meta">System Setup • <code class="git-hash">{{ git_commit }}</code></span>
+  <a href="/" class="logo"><span class="logo-icon">⚾</span> MLB Predict</a>
+  <span class="meta">Initial Setup</span>
+  <code class="git-hash">{{ git_commit }}</code>
 </header>
 
-<div class="init-container">
-  <div class="init-card">
-    <div class="init-title">System Initializing</div>
-    <div class="init-sub">
-      The system is setting up for first use. Data ingestion and model training
-      are running automatically. This page will redirect once everything is ready.
+<div class="boot-container">
+  <div class="boot-card" id="boot-card">
+    <div class="boot-title">System Initializing</div>
+    <div class="boot-sub">
+      The prediction system is setting up for first use. Data ingestion and model training
+      run automatically. This page updates in real time and will redirect when everything is ready.
     </div>
 
-    <div class="init-status">
-      <span class="dot" id="dot-ingest"></span>
-      <span id="label-ingest">Ingest: waiting…</span>
+    <div class="progress-section" id="progress-section" style="display:none">
+      <div class="progress-header">
+        <span class="progress-pct" id="progress-pct">0%</span>
+        <span class="progress-eta" id="progress-eta"></span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-step-label" id="progress-step-label"></div>
     </div>
-    <div class="init-status">
-      <span class="dot" id="dot-retrain"></span>
-      <span id="label-retrain">Retrain: waiting…</span>
+
+    <div id="phases-container">
+      <div class="waiting-state" id="waiting-state">
+        <div class="spinner"></div>
+        <p>Waiting for bootstrap to begin…</p>
+      </div>
     </div>
 
-    <div class="init-step" id="current-step"></div>
-    <div class="init-elapsed" id="elapsed"></div>
+    <div id="error-container"></div>
 
-    <div class="log-box" id="log-output"></div>
+    <div class="log-section" id="log-section" style="display:none">
+      <button type="button" class="log-toggle" id="log-toggle" onclick="toggleLog()">
+        <span class="log-arrow" id="log-arrow">&#9654;</span> Live Output
+      </button>
+      <div class="log-box" id="log-output"></div>
+    </div>
 
-    <div class="init-ready" id="ready-banner">
-      <p style="margin-bottom:0.75rem;color:var(--green);font-weight:600">Setup complete!</p>
+    <div class="ready-banner" id="ready-banner">
+      <p>Setup complete!</p>
       <a href="/">Open MLB Prediction System</a>
+      <div class="redirect-note">Redirecting automatically in a few seconds…</div>
     </div>
 
-    <div class="init-actions">
-      <a href="/dashboard">Open full dashboard</a>
+    <div class="boot-footer">
+      <a href="/dashboard">Open admin dashboard</a>
     </div>
   </div>
 </div>
@@ -74,78 +285,140 @@
 <script>
 var pollInterval = 2000;
 var prevLogCount = 0;
+  var logOpen = false;
 
 function fmtDuration(secs) {
   if (secs == null) return '';
-  return secs < 60
-    ? secs.toFixed(1) + 's'
-    : Math.floor(secs / 60) + 'm ' + Math.round(secs % 60) + 's';
+  if (secs < 60) return Math.round(secs) + 's';
+  return Math.floor(secs / 60) + 'm ' + Math.round(secs % 60) + 's';
 }
 
-function statusLabel(name, p) {
-  var s = p.status;
-  if (s === 'running') {
-    var el = '';
-    if (p.elapsed_seconds != null) el = ' (' + fmtDuration(p.elapsed_seconds) + ')';
-    return name + ': <span class="spinner-inline"></span>running…' + el;
+  function phaseBadge(status) {
+    var label = status === 'running' ? 'Running'
+      : status === 'success' ? 'Complete'
+        : status === 'failed' ? 'Failed'
+          : 'Pending';
+    var cls = status === 'running' ? 'running'
+      : status === 'success' ? 'complete'
+        : status === 'failed' ? 'failed'
+          : 'pending';
+    return '<span class="phase-badge ' + cls + '">' + label + '</span>';
   }
-  if (s === 'success') {
-    var dur = p.elapsed_seconds != null ? ' in ' + fmtDuration(p.elapsed_seconds) : '';
-    return name + ': complete' + dur;
-  }
-  if (s === 'failed') return name + ': <span style="color:var(--red)">failed</span>';
-  return name + ': waiting…';
+
+  function stepIcon(status) {
+    if (status === 'running') return '<div class="step-spinner"></div>';
+    if (status === 'complete') return '<span class="step-icon complete">&#10003;</span>';
+    if (status === 'failed') return '<span class="step-icon failed">&#10007;</span>';
+    return '<span class="step-icon pending">&#9675;</span>';
 }
 
-function updateStep(pipelines) {
-  var step = '';
-  var active = pipelines.ingest.status === 'running' ? pipelines.ingest
-             : pipelines.retrain.status === 'running' ? pipelines.retrain
-             : null;
-  if (active && active.log_tail && active.log_tail.length) {
-    for (var i = active.log_tail.length - 1; i >= 0; i--) {
-      if (active.log_tail[i].indexOf('>>>') === 0) {
-        step = active.log_tail[i];
-        break;
-      }
+  function renderPhase(name, label, data) {
+    var steps = data.steps || [];
+    if (steps.length === 0 && data.status === 'idle') {
+      return '<div class="phase" id="phase-' + name + '">' +
+        '<div class="phase-header">' + label + ' ' + phaseBadge(data.status) + '</div>' +
+        '</div>';
     }
+    var html = '<div class="phase" id="phase-' + name + '">';
+    html += '<div class="phase-header">' + label + ' ' + phaseBadge(data.status) + '</div>';
+    if (steps.length > 0) {
+      html += '<ul class="step-list">';
+      for (var i = 0; i < steps.length; i++) {
+        var s = steps[i];
+        var cls = s.status === 'running' ? ' running' : '';
+        var dur = s.elapsed_seconds != null ? fmtDuration(s.elapsed_seconds) : '';
+        html += '<li class="step-item' + cls + '">' +
+          stepIcon(s.status) +
+          '<span class="step-name">' + s.description + '</span>' +
+          '<span class="step-duration">' + dur + '</span>' +
+          '</li>';
+      }
+    html += '</ul>';
   }
-  document.getElementById('current-step').textContent = step;
+  html += '</div>';
+  return html;
+}
+
+  function toggleLog() {
+    logOpen = !logOpen;
+    document.getElementById('log-output').classList.toggle('open', logOpen);
+    document.getElementById('log-arrow').classList.toggle('open', logOpen);
 }
 
 async function poll() {
   try {
-    var r = await fetch('/api/admin/status');
-    var s = await r.json();
-    var p = s.pipelines;
+    var r = await fetch('/api/bootstrap-progress');
+    var d = await r.json();
 
-    document.getElementById('dot-ingest').className = 'dot ' + p.ingest.status;
-    document.getElementById('dot-retrain').className = 'dot ' + p.retrain.status;
-    document.getElementById('label-ingest').innerHTML = statusLabel('Ingest', p.ingest);
-    document.getElementById('label-retrain').innerHTML = statusLabel('Retrain', p.retrain);
-
-    updateStep(p);
-
-    var active = p.ingest.status === 'running' ? p.ingest
-               : p.retrain.status === 'running' ? p.retrain : null;
-    if (active && active.log_tail) {
-      var box = document.getElementById('log-output');
-      box.textContent = active.log_tail.join('\n');
-      if (active.log_line_count > prevLogCount) {
-        box.scrollTop = box.scrollHeight;
-        prevLogCount = active.log_line_count;
-      }
-    }
-
-    var ready = await fetch('/api/health');
-    var h = await ready.json();
-    if (h.ready) {
+    if (d.ready) {
+      document.getElementById('boot-card').className = 'boot-card done';
       document.getElementById('ready-banner').style.display = 'block';
-      setTimeout(function() { window.location.href = '/'; }, 3000);
+      document.getElementById('progress-fill').style.width = '100%';
+      document.getElementById('progress-pct').textContent = '100%';
+      document.getElementById('progress-eta').textContent = '';
+      document.getElementById('progress-step-label').textContent = 'All steps complete';
+      setTimeout(function () { window.location.href = '/'; }, 3000);
       return;
     }
+
+    var hasFailed = d.failed;
+    if (hasFailed) {
+      document.getElementById('boot-card').className = 'boot-card error';
+      document.getElementById('progress-fill').className = 'progress-fill error';
+      var errHtml = '<div class="error-banner">' +
+        '<div class="error-banner-title">Bootstrap Failed</div>' +
+        '<div class="error-banner-detail">' + (d.error || 'Unknown error') + '</div>' +
+        '<div class="error-banner-help">Check the live output below for details. ' +
+        'You can retry from the <a href="/dashboard">admin dashboard</a>.</div>' +
+        '</div>';
+      document.getElementById('error-container').innerHTML = errHtml;
+    }
+
+    var showProgress = d.total_steps > 0;
+    document.getElementById('progress-section').style.display = showProgress ? '' : 'none';
+    document.getElementById('waiting-state').style.display = showProgress ? 'none' : '';
+
+    if (showProgress) {
+      document.getElementById('progress-pct').textContent = d.progress_pct + '%';
+      document.getElementById('progress-fill').style.width = d.progress_pct + '%';
+      document.getElementById('progress-step-label').textContent =
+        'Step ' + d.completed_steps + ' of ' + d.total_steps + ' complete';
+
+      if (d.eta_seconds != null && !hasFailed) {
+        document.getElementById('progress-eta').textContent = '~' + fmtDuration(d.eta_seconds) + ' remaining';
+      } else {
+        document.getElementById('progress-eta').textContent = '';
+      }
+
+      var phases = d.phases || {};
+      var phasesHtml = renderPhase('ingest', 'Phase 1: Data Ingestion', phases.ingest || {});
+      phasesHtml += renderPhase('retrain', 'Phase 2: Model Training', phases.retrain || {});
+      document.getElementById('phases-container').innerHTML = phasesHtml;
+    }
+
+    var ingest = d.phases ? d.phases.ingest : {};
+    var retrain = d.phases ? d.phases.retrain : {};
+    var activePipeline = ingest.status === 'running' ? ingest
+      : retrain.status === 'running' ? retrain : null;
+
+    if (activePipeline && activePipeline.log_tail && activePipeline.log_tail.length > 0) {
+      document.getElementById('log-section').style.display = '';
+      var box = document.getElementById('log-output');
+      box.textContent = activePipeline.log_tail.join('\n');
+      if (activePipeline.log_line_count > prevLogCount) {
+        box.scrollTop = box.scrollHeight;
+        prevLogCount = activePipeline.log_line_count;
+      }
+    } else if (showProgress) {
+      document.getElementById('log-section').style.display = '';
+    }
+
   } catch (e) {}
-  setTimeout(poll, pollInterval);
+
+  if (!document.getElementById('ready-banner').style.display ||
+    document.getElementById('ready-banner').style.display === 'none') {
+    setTimeout(poll, pollInterval);
+  }
 }
 
 poll();

@@ -52,6 +52,15 @@ class PipelineStatus(str, Enum):
 
 
 @dataclass
+class StepInfo:
+    """Progress tracker for a single pipeline step."""
+
+    description: str
+    status: str = "pending"
+    elapsed_seconds: float | None = None
+
+
+@dataclass
 class PipelineState:
     """Mutable state container for a single pipeline run."""
 
@@ -62,6 +71,8 @@ class PipelineState:
     elapsed_seconds: float | None = None
     log_lines: list[str] = field(default_factory=list)
     error: str | None = None
+    steps: list[StepInfo] = field(default_factory=list)
+    current_step_index: int = -1
 
     def reset(self) -> None:
         self.status = PipelineStatus.RUNNING
@@ -70,6 +81,29 @@ class PipelineState:
         self.elapsed_seconds = None
         self.log_lines = []
         self.error = None
+        self.steps = []
+        self.current_step_index = -1
+
+    def init_steps(self, descriptions: list[str]) -> None:
+        """Pre-populate the step list so the UI can show all steps upfront."""
+        self.steps = [StepInfo(description=d) for d in descriptions]
+
+    def begin_step(self, index: int) -> None:
+        """Mark a step as running."""
+        self.current_step_index = index
+        if 0 <= index < len(self.steps):
+            self.steps[index].status = "running"
+
+    def complete_step(self, index: int, elapsed: float) -> None:
+        """Mark a step as complete with its duration."""
+        if 0 <= index < len(self.steps):
+            self.steps[index].status = "complete"
+            self.steps[index].elapsed_seconds = elapsed
+
+    def fail_step(self, index: int) -> None:
+        """Mark a step as failed."""
+        if 0 <= index < len(self.steps):
+            self.steps[index].status = "failed"
 
     def finish(self, ok: bool, error: str | None = None) -> None:
         self.status = PipelineStatus.SUCCESS if ok else PipelineStatus.FAILED
@@ -96,6 +130,16 @@ class PipelineState:
             "error": self.error,
             "log_tail": self.log_lines[-80:],
             "log_line_count": len(self.log_lines),
+            "steps": [
+                {
+                    "description": s.description,
+                    "status": s.status,
+                    "elapsed_seconds": s.elapsed_seconds,
+                }
+                for s in self.steps
+            ],
+            "current_step_index": self.current_step_index,
+            "total_steps": len(self.steps),
         }
 
 
@@ -341,17 +385,23 @@ async def run_pipeline(
             commands = _update_commands(opts)
         else:
             commands = _retrain_commands()
-        for desc, cmd in commands:
+
+        state.init_steps([desc for desc, _ in commands])
+
+        for step_idx, (desc, cmd) in enumerate(commands):
+            state.begin_step(step_idx)
             state.append_log(f">>> {desc}")
             logger.info("[%s] %s", kind.value, desc)
             step_t0 = time.monotonic()
             rc = await _stream_process(cmd, state)
-            step_ms = (time.monotonic() - step_t0) * 1000
-            state.append_log(f"    [{step_ms / 1000:.1f}s]")
-            logger.info("[%s] %s completed in %.1fs", kind.value, desc, step_ms / 1000)
+            step_elapsed = time.monotonic() - step_t0
+            state.append_log(f"    [{step_elapsed:.1f}s]")
+            logger.info("[%s] %s completed in %.1fs", kind.value, desc, step_elapsed)
             if rc != 0:
+                state.fail_step(step_idx)
                 state.finish(ok=False, error=f"Step '{desc}' exited with code {rc}")
                 return
+            state.complete_step(step_idx, step_elapsed)
 
         if kind == PipelineKind.RETRAIN:
             marker = _MODEL_DIR / ".last_retrain"

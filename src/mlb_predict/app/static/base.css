@@ -1304,6 +1304,107 @@ h2.section-heading {
   color: #fff;
   font-weight: 600;
 }
+/* ── Export dropdown (injected by base.js) ───────────────────────── */
+.export-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.export-toggle-btn {
+  white-space: nowrap;
+}
+
+.export-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 50;
+  min-width: 170px;
+  overflow: hidden;
+}
+
+.export-menu.open {
+  display: block;
+}
+
+.export-menu button {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background var(--transition);
+  min-height: auto;
+  border-radius: 0;
+}
+
+.export-menu button:last-child {
+  border-bottom: none;
+}
+
+.export-menu button:hover {
+  background: var(--card);
+}
+
+.export-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.export-overlay-inner {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem 2.5rem;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+}
+
+.export-overlay-inner .spinner {
+  margin-bottom: 0.75rem;
+}
+
+.export-overlay-inner p {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+@media (max-width: 768px) {
+  .export-dropdown {
+    width: 100%;
+  }
+
+  .export-toggle-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .export-menu {
+    position: static;
+    box-shadow: none;
+    border-radius: var(--radius-sm);
+    margin-top: 0.25rem;
+    min-width: 0;
+    width: 100%;
+  }
+}
 /* ── Utility classes ─────────────────────────────────────────────── */
 .text-mono { font-family: var(--font-mono); }
 .text-muted { color: var(--muted); }

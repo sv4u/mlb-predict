@@ -702,9 +702,195 @@ function _buildPageNumbers(current, total) {
   return result;
 }
 
+/* ── Export as PDF / Image ─────────────────────────────────────────── */
+
+var EXPORT_SKIP_PATHS = ['/dashboard', '/sitemap'];
+
+function _loadExportLibs() {
+  if (!document.querySelector('script[src*="html2canvas"]')) {
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    document.head.appendChild(s);
+  }
+  if (!document.querySelector('script[src*="jspdf"]')) {
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+    document.head.appendChild(s);
+  }
+}
+
+function injectExportButton() {
+  var nav = document.querySelector('.site-nav');
+  if (!nav || document.getElementById('export-dropdown')) return;
+
+  var path = window.location.pathname;
+  for (var i = 0; i < EXPORT_SKIP_PATHS.length; i++) {
+    if (path === EXPORT_SKIP_PATHS[i] || path.indexOf(EXPORT_SKIP_PATHS[i] + '/') === 0) return;
+  }
+
+  _loadExportLibs();
+
+  var divider = document.createElement('span');
+  divider.className = 'nav-divider export-nav-divider';
+
+  var wrap = document.createElement('div');
+  wrap.id = 'export-dropdown';
+  wrap.className = 'export-dropdown';
+
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-sm sec export-toggle-btn';
+  btn.textContent = 'Export \u25BE';
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    toggleExportMenu();
+  });
+
+  var menu = document.createElement('div');
+  menu.id = 'export-menu';
+  menu.className = 'export-menu';
+
+  var pdfBtn = document.createElement('button');
+  pdfBtn.type = 'button';
+  pdfBtn.textContent = 'Export as PDF';
+  pdfBtn.addEventListener('click', function () { exportAs('pdf'); });
+
+  var imgBtn = document.createElement('button');
+  imgBtn.type = 'button';
+  imgBtn.textContent = 'Export as Image';
+  imgBtn.addEventListener('click', function () { exportAs('image'); });
+
+  menu.appendChild(pdfBtn);
+  menu.appendChild(imgBtn);
+  wrap.appendChild(btn);
+  wrap.appendChild(menu);
+
+  nav.appendChild(divider);
+  nav.appendChild(wrap);
+}
+
+function toggleExportMenu() {
+  var menu = document.getElementById('export-menu');
+  if (menu) menu.classList.toggle('open');
+}
+
+function closeExportMenu() {
+  var menu = document.getElementById('export-menu');
+  if (menu) menu.classList.remove('open');
+}
+
+document.addEventListener('click', function (e) {
+  var dropdown = document.getElementById('export-dropdown');
+  if (dropdown && !dropdown.contains(e.target)) closeExportMenu();
+});
+
+function _showExportOverlay(msg) {
+  var overlay = document.createElement('div');
+  overlay.className = 'export-overlay';
+  overlay.id = 'export-overlay';
+  overlay.innerHTML =
+    '<div class="export-overlay-inner">' +
+    '<div class="spinner"></div>' +
+    '<p>' + (msg || 'Generating export\u2026') + '</p>' +
+    '</div>';
+  document.body.appendChild(overlay);
+}
+
+function _hideExportOverlay() {
+  var el = document.getElementById('export-overlay');
+  if (el) el.remove();
+}
+
+function _getExportFileName() {
+  var title = document.title || 'MLB Predict';
+  title = title.replace(/\s*[—–\-]\s*MLB Predict(?:ion System)?$/i, '').trim();
+  title = title.replace(/@/g, 'at');
+  var slug = title.replace(/[^a-zA-Z0-9 ]/g, '').trim().replace(/\s+/g, '-');
+  return 'MLB-Predict_' + (slug || 'Export');
+}
+
+async function exportAs(format) {
+  closeExportMenu();
+
+  if (typeof html2canvas === 'undefined') {
+    alert('Export libraries are still loading. Please try again in a moment.');
+    return;
+  }
+  if (format === 'pdf' && (typeof jspdf === 'undefined' || !jspdf.jsPDF)) {
+    alert('PDF library is still loading. Please try again in a moment.');
+    return;
+  }
+
+  _showExportOverlay(format === 'pdf' ? 'Generating PDF\u2026' : 'Generating image\u2026');
+  await new Promise(function (r) { setTimeout(r, 50); });
+
+  var header = document.querySelector('.site-header');
+  var exportDropdown = document.getElementById('export-dropdown');
+  var exportDivider = document.querySelector('.export-nav-divider');
+  var overlay = document.getElementById('export-overlay');
+
+  var origPosition = header ? header.style.position : '';
+  if (header) header.style.position = 'relative';
+  if (exportDropdown) exportDropdown.style.display = 'none';
+  if (exportDivider) exportDivider.style.display = 'none';
+
+  try {
+    var canvas = await html2canvas(document.body, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      ignoreElements: function (el) { return el === overlay; }
+    });
+
+    if (header) header.style.position = origPosition;
+    if (exportDropdown) exportDropdown.style.display = '';
+    if (exportDivider) exportDivider.style.display = '';
+
+    var fileName = _getExportFileName();
+
+    if (format === 'image') {
+      var link = document.createElement('a');
+      link.download = fileName + '.png';
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else if (format === 'pdf') {
+      var imgData = canvas.toDataURL('image/png');
+      var pdfWidth = 210;
+      var imgWidth = pdfWidth;
+      var imgHeight = (canvas.height * imgWidth) / canvas.width;
+      var pdf = new jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      var pageHeight = pdf.internal.pageSize.getHeight();
+      var heightLeft = imgHeight;
+      var position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      pdf.save(fileName + '.pdf');
+    }
+  } catch (err) {
+    if (header) header.style.position = origPosition;
+    if (exportDropdown) exportDropdown.style.display = '';
+    if (exportDivider) exportDivider.style.display = '';
+    console.error('Export failed:', err);
+    alert('Export failed: ' + (err.message || 'Unknown error'));
+  } finally {
+    _hideExportOverlay();
+  }
+}
+
 /* ── Auto-init on DOMContentLoaded ─────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", function () {
   initAllSortables();
   initModelSelector();
   initFooterTimezone();
+  injectExportButton();
 });
