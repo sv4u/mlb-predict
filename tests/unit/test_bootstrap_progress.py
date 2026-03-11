@@ -12,7 +12,6 @@ import pytest
 
 from mlb_predict.app.admin import (
     PipelineKind,
-    PipelineState,
     PipelineStatus,
     _ingest_commands,
     _retrain_commands,
