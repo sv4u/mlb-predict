@@ -250,11 +250,15 @@ async def api_bootstrap_progress() -> dict:
     retrain_steps = retrain.get("steps", [])
 
     if not ingest_steps and ingest["status"] == "idle":
-        ingest_steps = [{"description": d, "status": "pending", "elapsed_seconds": None}
-                        for d, _ in _ingest_commands()]
+        ingest_steps = [
+            {"description": d, "status": "pending", "elapsed_seconds": None}
+            for d, _ in _ingest_commands()
+        ]
     if not retrain_steps and retrain["status"] == "idle":
-        retrain_steps = [{"description": d, "status": "pending", "elapsed_seconds": None}
-                         for d, _ in _retrain_commands()]
+        retrain_steps = [
+            {"description": d, "status": "pending", "elapsed_seconds": None}
+            for d, _ in _retrain_commands()
+        ]
 
     all_steps = ingest_steps + retrain_steps
     total = len(all_steps) if all_steps else 1
@@ -262,7 +266,8 @@ async def api_bootstrap_progress() -> dict:
     progress_pct = round(completed / total * 100) if total else 0
 
     completed_durations = [
-        s["elapsed_seconds"] for s in all_steps
+        s["elapsed_seconds"]
+        for s in all_steps
         if s["status"] == "complete" and s["elapsed_seconds"] is not None
     ]
     avg_step_duration = (
