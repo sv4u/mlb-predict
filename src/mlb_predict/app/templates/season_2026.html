@@ -137,6 +137,14 @@
 
   <div class="layout">
     <div>
+      <div style="display:flex;align-items:center;margin-bottom:0.75rem">
+        <span style="font-size:0.82rem;font-weight:600;color:var(--text-secondary)">Show:</span>
+        <div class="game-type-tabs" id="game-type-tabs">
+          <button class="game-type-tab active" onclick="setGameType('',this)">All</button>
+          <button class="game-type-tab" onclick="setGameType('R',this)">Regular</button>
+          <button class="game-type-tab" onclick="setGameType('S',this)">Spring</button>
+        </div>
+      </div>
       <div class="filter-panel">
         <div class="filter-row">
           <div class="filter-group">
@@ -202,9 +210,10 @@
 <script>
 const $ = id => document.getElementById(id);
 let currentPage = 0;
-const pageSize = 50;
+  let pageSize = 50;
 let totalRows = 0;
   let oddsMap = {};
+  let gameTypeFilter = '';
 
 function favouriteBadge(prob) {
   if (prob >= 0.60) return '<span class="badge badge-home-fav">Home fav</span>';
@@ -341,6 +350,7 @@ async function init() {
     if (home) url += '&home=' + encodeURIComponent(home);
     if (away) url += '&away=' + encodeURIComponent(away);
     if (search) url += '&q=' + encodeURIComponent(search);
+    if (gameTypeFilter) url += '&game_type=' + encodeURIComponent(gameTypeFilter);
 
     const data = await timedFetch(url, 'timing-games');
     let games = data.games;
@@ -411,18 +421,15 @@ async function init() {
 }
 
 function renderPagination(total) {
-  const pages = Math.ceil(total / pageSize);
-  if (pages <= 1) {
-    $('pagination').innerHTML = '<span>' + total.toLocaleString() + ' games</span>';
-    return;
-  }
-  $('pagination').innerHTML =
-    '<span>' + total.toLocaleString() + ' games</span>' +
-    '<span>' +
-    '<button class="sec btn-sm" onclick="loadGames(' + (currentPage - 1) + ')" ' + (currentPage === 0 ? 'disabled' : '') + '>← Prev</button>' +
-    ' Page ' + (currentPage + 1) + ' of ' + pages + ' ' +
-    '<button class="sec btn-sm" onclick="loadGames(' + (currentPage + 1) + ')" ' + (currentPage >= pages - 1 ? 'disabled' : '') + '>Next →</button>' +
-    '</span>';
+  renderFullPagination('pagination', {
+    total: total,
+    currentPage: currentPage,
+    pageSize: pageSize,
+    onPageChange: function (pg, sz) {
+      if (sz !== pageSize) { pageSize = sz; }
+      loadGames(pg);
+    }
+  });
 }
 
 // ── Power rankings sidebar ─────────────────────────────────────────────────
@@ -455,12 +462,23 @@ async function loadRankings() {
   }
 }
 
+  function setGameType(gt, btn) {
+    gameTypeFilter = gt;
+    document.querySelectorAll('.game-type-tab').forEach(function (t) { t.classList.remove('active'); });
+    if (btn) btn.classList.add('active');
+    loadGames(0);
+  }
+
 function resetFilters() {
   ['f-home', 'f-away'].forEach(id => $(id).value = '');
   $('f-from').value = '';
   $('f-to').value = '';
   const fs = document.getElementById('f-search');
   if (fs) fs.value = '';
+  gameTypeFilter = '';
+  document.querySelectorAll('.game-type-tab').forEach(function (t) { t.classList.remove('active'); });
+  var allTab = document.querySelector('.game-type-tab');
+  if (allTab) allTab.classList.add('active');
   loadGames(0);
 }
 

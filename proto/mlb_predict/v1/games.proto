@@ -19,6 +19,8 @@ message GetGamesRequest {
   int32 offset = 6;
   string sort = 7;
   string order = 8;
+  optional string q = 9;
+  optional string game_type = 10;
 }
 
 message GetGamesResponse {

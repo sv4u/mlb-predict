@@ -1146,6 +1146,164 @@ h2.section-heading {
   to { opacity: 1; }
 }
 
+/* ── Full pagination bar ─────────────────────────────────────────── */
+.pg-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0;
+  font-size: 0.8rem;
+}
+
+.pg-info {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.pg-btn {
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pg-btn:hover:not(:disabled) {
+  background: var(--card);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.pg-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.pg-btn.pg-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.pg-num {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.pg-ellipsis {
+  width: 1.5rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  user-select: none;
+}
+
+.pg-jump {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.pg-input {
+  width: 3.5rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  text-align: center;
+}
+
+.pg-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.pg-size {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.pg-size-select {
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 640px) {
+  .pg-bar {
+    gap: 0.5rem;
+  }
+
+  .pg-controls {
+    flex-wrap: wrap;
+  }
+}
+
+/* ── Game type tabs ──────────────────────────────────────────────── */
+.game-type-tabs {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-left: 0.75rem;
+}
+
+.game-type-tab {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: none;
+  border-right: 1px solid var(--border);
+  transition: background var(--transition), color var(--transition);
+  font-family: inherit;
+}
+
+.game-type-tab:last-child {
+  border-right: none;
+}
+
+.game-type-tab:hover {
+  background: var(--card);
+  color: var(--text);
+}
+
+.game-type-tab.active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
 /* ── Utility classes ─────────────────────────────────────────────── */
 .text-mono { font-family: var(--font-mono); }
 .text-muted { color: var(--muted); }

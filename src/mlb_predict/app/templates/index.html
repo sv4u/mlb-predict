@@ -375,9 +375,14 @@
   </div>
 
   <!-- Tabs -->
-  <div class="tabs">
+  <div class="tabs" style="display:flex;align-items:center;flex-wrap:wrap">
     <div class="tab active" onclick="switchTab('games',this)">Games</div>
     <div class="tab" onclick="switchTab('upsets',this)">Biggest Upsets</div>
+    <div class="game-type-tabs" id="game-type-tabs">
+      <button class="game-type-tab active" onclick="setGameType('',this)">All</button>
+      <button class="game-type-tab" onclick="setGameType('R',this)">Regular</button>
+      <button class="game-type-tab" onclick="setGameType('S',this)">Spring</button>
+    </div>
   </div>
 
   <!-- Filters -->
@@ -445,7 +450,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-let currentTab = 'games', currentPage = 0, pageSize = 50, totalRows = 0;
+  let currentTab = 'games', currentPage = 0, pageSize = 50, totalRows = 0, gameTypeFilter = '';
 
   function showError(msg) {
   $('table-wrap').innerHTML = '<p style="color:var(--red);padding:1.5rem">' + msg + '</p>';
@@ -602,6 +607,7 @@ async function loadGames() {
   if (away) url += '&away=' + encodeURIComponent(away);
   if (date) url += '&date=' + encodeURIComponent(date);
   if (search) url += '&q=' + encodeURIComponent(search);
+  if (gameTypeFilter) url += '&game_type=' + encodeURIComponent(gameTypeFilter);
 
   const data = await timedFetch(url, 'timing-data');
   totalRows = data.total;
@@ -696,18 +702,15 @@ async function loadUpsets() {
 }
 
 function renderPagination() {
-  const pages = Math.ceil(totalRows / pageSize);
-  if (pages <= 1) {
-    $('pagination').innerHTML = '<span>' + totalRows.toLocaleString() + ' games</span>';
-    return;
-  }
-  $('pagination').innerHTML =
-    '<span>' + totalRows.toLocaleString() + ' games</span>' +
-    '<span>' +
-    '<button class="sec btn-sm" onclick="loadData(' + (currentPage - 1) + ')" ' + (currentPage === 0 ? 'disabled' : '') + '>← Prev</button>' +
-    ' Page ' + (currentPage + 1) + ' of ' + pages + ' ' +
-    '<button class="sec btn-sm" onclick="loadData(' + (currentPage + 1) + ')" ' + (currentPage >= pages - 1 ? 'disabled' : '') + '>Next →</button>' +
-    '</span>';
+  renderFullPagination('pagination', {
+    total: totalRows,
+    currentPage: currentPage,
+    pageSize: pageSize,
+    onPageChange: function (pg, sz) {
+      if (sz !== pageSize) { pageSize = sz; }
+      loadData(pg);
+    }
+  });
 }
 
   function fillModelPerf(cv) {
@@ -732,12 +735,20 @@ function renderPagination() {
     toggle.classList.toggle('open', !open);
   }
 
+  function setGameType(gt, btn) {
+    gameTypeFilter = gt;
+    document.querySelectorAll('.game-type-tab').forEach(function (t) { t.classList.remove('active'); });
+    if (btn) btn.classList.add('active');
+    loadData(0);
+  }
+
 function switchTab(tab, el) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   $('f-date-wrap').style.display = tab === 'games' ? '' : 'none';
   $('f-minprob-wrap').style.display = tab === 'upsets' ? '' : 'none';
+  $('game-type-tabs').style.display = tab === 'games' ? '' : 'none';
   loadData(0);
 }
 
@@ -747,6 +758,10 @@ function resetFilters() {
   const fs = document.getElementById('f-search');
   if (fs) fs.value = '';
   $('f-minprob').value = '0.65';
+  gameTypeFilter = '';
+  document.querySelectorAll('.game-type-tab').forEach(function (t) { t.classList.remove('active'); });
+  var allTab = document.querySelector('.game-type-tab');
+  if (allTab) allTab.classList.add('active');
   loadData(0);
 }
 

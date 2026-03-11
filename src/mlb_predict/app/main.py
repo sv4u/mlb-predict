@@ -318,6 +318,7 @@ async def api_games(
     away: Annotated[str | None, Query()] = None,
     date: Annotated[str | None, Query()] = None,
     q: Annotated[str | None, Query(description="Search matchup (team name or abbrev)")] = None,
+    game_type: Annotated[str | None, Query(description="Filter by game type: R=regular, S=spring")] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     sort: Annotated[str, Query()] = "date",
@@ -343,6 +344,10 @@ async def api_games(
                 req.away = away
             if date is not None:
                 req.date = date
+            if q is not None:
+                req.q = q
+            if game_type is not None:
+                req.game_type = game_type
             r = await stubs["games"].GetGames(req)
             return _grpc_dict(r)
         except grpc.RpcError as e:
@@ -350,12 +355,13 @@ async def api_games(
     if not is_ready():
         return _not_ready_json()
     logger.debug(
-        "GET /api/games season=%s home=%s away=%s date=%s q=%s limit=%d offset=%d",
+        "GET /api/games season=%s home=%s away=%s date=%s q=%s game_type=%s limit=%d offset=%d",
         season,
         home,
         away,
         date,
         q,
+        game_type,
         limit,
         offset,
     )
@@ -369,6 +375,8 @@ async def api_games(
             df = df[df["away_retro"] == away.upper()]
         if date:
             df = df[df["date"].astype(str) == date]
+        if game_type:
+            df = df[df["game_type"] == game_type]
         if q and q.strip():
             q_ = q.strip().lower()
             hretro = df["home_retro"].astype(str).str.lower()
@@ -983,7 +991,7 @@ async def api_player_stats(
     season: Annotated[int, Query(ge=2000, le=2030)] = 2026,
     group: Annotated[str, Query(description="hitting or pitching")] = "hitting",
     league_id: Annotated[int | None, Query(description="AL=103, NL=104; omit for both")] = None,
-    limit: Annotated[int, Query(ge=1, le=250)] = 250,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> dict:
     """Return full player stats table (batting or pitching) for a season from the MLB Stats API."""

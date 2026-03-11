@@ -19,6 +19,7 @@ message Game {
   optional int32 home_win = 9;
   optional double home_elo = 10;
   optional double away_elo = 11;
+  string game_type = 12;
 }
 
 message Factor {

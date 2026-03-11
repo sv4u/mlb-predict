@@ -163,18 +163,18 @@
       <h2>Player Statistics</h2>
       <p>
         Full batting and pitching stat tables by season. Sort by column header.
-        Data is loaded live from the MLB Stats API (up to 250 players per request).
+        Data is loaded live from the MLB Stats API. Use filters and pagination to browse all players.
       </p>
     </div>
 
     <div class="filter-panel">
       <div class="filter-group">
         <label for="players-season">Season</label>
-        <select id="players-season"></select>
+        <select id="players-season" onchange="loadPlayers(0)"></select>
       </div>
       <div class="filter-group">
         <label for="players-league">League</label>
-        <select id="players-league">
+        <select id="players-league" onchange="loadPlayers(0)">
           <option value="">All (MLB)</option>
           <option value="103">American League</option>
           <option value="104">National League</option>
@@ -182,12 +182,11 @@
       </div>
       <div class="filter-group">
         <label for="players-group">Type</label>
-        <select id="players-group">
+        <select id="players-group" onchange="loadPlayers(0)">
           <option value="hitting">Batting</option>
           <option value="pitching">Pitching</option>
         </select>
       </div>
-      <button type="button" class="btn" id="players-load-btn" onclick="loadPlayers()">Load player stats</button>
       <span class="timing-badge" id="timing-players" style="display:none"></span>
     </div>
 
@@ -200,6 +199,7 @@
         </table>
       </div>
     </div>
+    <div class="pagination" id="players-pagination"></div>
   </div>
 
   <footer class="site-footer">
@@ -230,9 +230,13 @@
       }
     })();
 
-    var playersData = [];
+        var playersCurrentPage = 0;
+        var playersPageSize = 50;
+        var playersTotalEstimate = 0;
+        var playersHasMore = false;
     var playersSortCol = null;
     var playersSortDir = 1;
+        var playersData = [];
 
     function labelForStat(key) {
       var labels = {
@@ -253,12 +257,13 @@
       statKeys.sort();
 
       var thead = document.getElementById('players-thead');
-      var headerRow = '<tr><th data-col="name">Name</th><th data-col="team_abbrev">Team</th>';
-      statKeys.forEach(function (k) { headerRow += '<th class="num" data-col="' + k + '">' + labelForStat(k) + '</th>'; });
+      var headerRow = '<tr><th data-col="name" data-sort="string">Name</th><th data-col="team_abbrev" data-sort="string">Team</th>';
+      statKeys.forEach(function (k) { headerRow += '<th class="num" data-col="' + k + '" data-sort="number">' + labelForStat(k) + '</th>'; });
       headerRow += '</tr>';
       thead.innerHTML = headerRow;
 
       thead.querySelectorAll('th[data-col]').forEach(function (th) {
+        th.style.cursor = 'pointer';
         th.addEventListener('click', function () {
           var col = th.getAttribute('data-col');
           if (playersSortCol === col) playersSortDir = -playersSortDir; else { playersSortCol = col; playersSortDir = 1; }
@@ -287,51 +292,77 @@
       }).join('');
     }
 
-    async function loadPlayers() {
-      var btn = document.getElementById('players-load-btn');
-      var errEl = document.getElementById('players-error');
-      var timingEl = document.getElementById('timing-players');
+        async function loadPlayers(page) {
+          if (page == null) page = 0;
+          playersCurrentPage = page;
+          if (page === 0) playersTotalEstimate = 0;
+        var errEl = document.getElementById('players-error');
       var season = parseInt(document.getElementById('players-season').value, 10);
       var leagueVal = document.getElementById('players-league').value;
       var leagueId = leagueVal === '' ? null : parseInt(leagueVal, 10);
       var group = document.getElementById('players-group').value;
+        var offset = page * playersPageSize;
 
       errEl.style.display = 'none';
       errEl.textContent = '';
-      btn.disabled = true;
-      btn.textContent = 'Loading…';
+        setLoading('players-area', true);
       document.getElementById('players-tbody').innerHTML = '<tr><td colspan="10">Loading…</td></tr>';
 
-      var params = 'season=' + season + '&group=' + encodeURIComponent(group) + '&limit=250&offset=0';
+        var params = 'season=' + season + '&group=' + encodeURIComponent(group) + '&limit=' + playersPageSize + '&offset=' + offset;
       if (leagueId != null) params += '&league_id=' + leagueId;
       var start = performance.now();
       try {
         var r = await fetch('/api/player-stats?' + params);
         var serverMs = r.headers.get('X-Process-Time-Ms');
-        if (serverMs && timingEl) showTiming('timing-players', serverMs, performance.now() - start);
+        if (serverMs) showTiming('timing-players', serverMs, performance.now() - start);
         var data = await r.json();
         if (data.error) {
           errEl.textContent = data.error;
           errEl.style.display = 'block';
           document.getElementById('players-tbody').innerHTML = '';
           document.getElementById('players-thead').innerHTML = '';
-          btn.disabled = false;
-          btn.textContent = 'Load player stats';
+          document.getElementById('players-pagination').innerHTML = '';
+          setLoading('players-area', false);
           return;
         }
         playersData = data.players || [];
+        var count = data.count || playersData.length;
+        playersHasMore = count >= playersPageSize;
+
+        if (playersHasMore) {
+          playersTotalEstimate = Math.max(playersTotalEstimate, offset + count + 1);
+        } else {
+          playersTotalEstimate = offset + count;
+        }
+
         buildPlayersTable(playersData, group);
+        renderPlayersPagination();
       } catch (e) {
         errEl.textContent = 'Failed to load player stats: ' + (e.message || String(e));
         errEl.style.display = 'block';
         document.getElementById('players-tbody').innerHTML = '';
         document.getElementById('players-thead').innerHTML = '';
+        document.getElementById('players-pagination').innerHTML = '';
       }
-      btn.disabled = false;
-      btn.textContent = 'Load player stats';
+        setLoading('players-area', false);
     }
 
-    loadPlayers();
+        function renderPlayersPagination() {
+          renderFullPagination('players-pagination', {
+            total: playersTotalEstimate,
+            currentPage: playersCurrentPage,
+            pageSize: playersPageSize,
+            onPageChange: function (pg, sz) {
+              if (sz !== playersPageSize) {
+                playersPageSize = sz;
+                playersTotalEstimate = 0;
+              }
+              loadPlayers(pg);
+            }
+          });
+        }
+
+        loadPlayers(0);
   </script>
 </body>
 

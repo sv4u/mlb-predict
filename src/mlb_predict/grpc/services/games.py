@@ -43,6 +43,7 @@ def _row_to_game(r: Any) -> common_pb2.Game:
         game_pk=int(r.get("game_pk", 0) or 0),
         date=str(r.get("date", ""))[:10],
         season=int(r.get("season", 0) or 0),
+        game_type=str(r.get("game_type", "R") or "R"),
         home_retro=str(r.get("home_retro", "")),
         home_name=TEAM_NAMES.get(str(r.get("home_retro", "")), ""),
         away_retro=str(r.get("away_retro", "")),
@@ -81,6 +82,25 @@ class GameServicer(games_pb2_grpc.GameServiceServicer):
             df = df[df["away_retro"] == request.away.upper()]
         if request.HasField("date"):
             df = df[df["date"].astype(str) == request.date]
+        if request.HasField("game_type"):
+            df = df[df["game_type"] == request.game_type]
+        if request.HasField("q") and request.q.strip():
+            q_ = request.q.strip().lower()
+            hretro = df["home_retro"].astype(str).str.lower()
+            aretro = df["away_retro"].astype(str).str.lower()
+            home_name = df["home_retro"].map(
+                lambda r: (TEAM_NAMES.get(str(r), "") or "").lower()
+            )
+            away_name = df["away_retro"].map(
+                lambda r: (TEAM_NAMES.get(str(r), "") or "").lower()
+            )
+            mask = (
+                hretro.str.contains(q_, na=False, regex=False)
+                | aretro.str.contains(q_, na=False, regex=False)
+                | home_name.astype(str).str.contains(q_, na=False, regex=False)
+                | away_name.astype(str).str.contains(q_, na=False, regex=False)
+            )
+            df = df[mask]
 
         valid_sorts = {"date", "prob", "season", "game_pk"}
         sort_col = request.sort if request.sort in valid_sorts else "date"

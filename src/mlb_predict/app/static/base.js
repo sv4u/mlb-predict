@@ -586,6 +586,122 @@ function dateBadge(dateStr) {
   return '<span style="color:var(--muted);font-size:0.75rem">In ' + d + 'd</span>';
 }
 
+/* ── Reusable pagination component ─────────────────────────────────── */
+
+/**
+ * Render a full pagination bar into a container element.
+ * @param {string} containerId   DOM id for the pagination container
+ * @param {object} opts
+ * @param {number} opts.total       Total number of rows
+ * @param {number} opts.currentPage Zero-based current page index
+ * @param {number} opts.pageSize    Rows per page
+ * @param {function} opts.onPageChange  Called with (newPage, newPageSize)
+ * @param {number[]} [opts.pageSizes]   Available page sizes (default [25,50,100,200])
+ */
+function renderFullPagination(containerId, opts) {
+  var el = typeof containerId === 'string' ? document.getElementById(containerId) : containerId;
+  if (!el) return;
+
+  var total = opts.total || 0;
+  var currentPage = opts.currentPage || 0;
+  var pageSize = opts.pageSize || 50;
+  var onPageChange = opts.onPageChange;
+  var pageSizes = opts.pageSizes || [25, 50, 100, 200];
+  var pages = Math.ceil(total / pageSize);
+
+  if (total === 0) {
+    el.innerHTML = '<span class="pg-info">No results</span>';
+    return;
+  }
+
+  if (pages <= 1) {
+    el.innerHTML = '<span class="pg-info">' + total.toLocaleString() + ' results</span>';
+    return;
+  }
+
+  var pageNums = _buildPageNumbers(currentPage, pages);
+
+  var html = '<div class="pg-bar">';
+  html += '<span class="pg-info">' + total.toLocaleString() + ' results</span>';
+  html += '<div class="pg-controls">';
+  html += '<button class="pg-btn" data-pg="' + (currentPage - 1) + '"' + (currentPage === 0 ? ' disabled' : '') + ' title="Previous page">&lsaquo; Prev</button>';
+
+  pageNums.forEach(function (p) {
+    if (p === '...') {
+      html += '<span class="pg-ellipsis">&hellip;</span>';
+    } else {
+      html += '<button class="pg-btn pg-num' + (p === currentPage ? ' pg-active' : '') + '" data-pg="' + p + '">' + (p + 1) + '</button>';
+    }
+  });
+
+  html += '<button class="pg-btn" data-pg="' + (currentPage + 1) + '"' + (currentPage >= pages - 1 ? ' disabled' : '') + ' title="Next page">Next &rsaquo;</button>';
+  html += '</div>';
+
+  html += '<div class="pg-jump">';
+  html += '<label>Page <input type="number" class="pg-input" min="1" max="' + pages + '" value="' + (currentPage + 1) + '" /> of ' + pages + '</label>';
+  html += '</div>';
+
+  html += '<div class="pg-size">';
+  html += '<label>Show ';
+  html += '<select class="pg-size-select">';
+  pageSizes.forEach(function (s) {
+    html += '<option value="' + s + '"' + (s === pageSize ? ' selected' : '') + '>' + s + '</option>';
+  });
+  html += '</select></label>';
+  html += '</div>';
+  html += '</div>';
+
+  el.innerHTML = html;
+
+  el.querySelectorAll('.pg-btn[data-pg]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (btn.disabled) return;
+      var pg = parseInt(btn.getAttribute('data-pg'), 10);
+      if (pg >= 0 && pg < pages && onPageChange) onPageChange(pg, pageSize);
+    });
+  });
+
+  var jumpInput = el.querySelector('.pg-input');
+  if (jumpInput) {
+    jumpInput.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      var pg = parseInt(jumpInput.value, 10) - 1;
+      if (pg >= 0 && pg < pages && onPageChange) onPageChange(pg, pageSize);
+    });
+  }
+
+  var sizeSelect = el.querySelector('.pg-size-select');
+  if (sizeSelect) {
+    sizeSelect.addEventListener('change', function () {
+      var newSize = parseInt(sizeSelect.value, 10);
+      if (onPageChange) onPageChange(0, newSize);
+    });
+  }
+}
+
+function _buildPageNumbers(current, total) {
+  if (total <= 9) {
+    var arr = [];
+    for (var i = 0; i < total; i++) arr.push(i);
+    return arr;
+  }
+  var nums = new Set();
+  nums.add(0);
+  nums.add(1);
+  nums.add(total - 2);
+  nums.add(total - 1);
+  for (var j = current - 2; j <= current + 2; j++) {
+    if (j >= 0 && j < total) nums.add(j);
+  }
+  var sorted = Array.from(nums).sort(function (a, b) { return a - b; });
+  var result = [];
+  for (var k = 0; k < sorted.length; k++) {
+    if (k > 0 && sorted[k] - sorted[k - 1] > 1) result.push('...');
+    result.push(sorted[k]);
+  }
+  return result;
+}
+
 /* ── Auto-init on DOMContentLoaded ─────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", function () {
   initAllSortables();
