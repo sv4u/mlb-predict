@@ -789,6 +789,7 @@ async def api_cv_summary(request: Request) -> list[dict]:
         except grpc.RpcError:
             pass
     paths = [
+        Path("data/models/cv_summary_v4.json"),
         Path("data/models/cv_summary_v3.json"),
         Path("data/models/cv_summary_v2.json"),
         Path("data/models/cv_summary.json"),

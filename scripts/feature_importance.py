@@ -119,7 +119,9 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    artifact_dir = latest_artifact(args.model_type, model_dir=args.model_dir, version="v3")
+    artifact_dir = latest_artifact(args.model_type, model_dir=args.model_dir, version="v4")
+    if artifact_dir is None:
+        artifact_dir = latest_artifact(args.model_type, model_dir=args.model_dir, version="v3")
     if not artifact_dir or not artifact_dir.exists():
         raise SystemExit(f"No artifact found for {args.model_type} in {args.model_dir}")
 

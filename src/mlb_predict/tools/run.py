@@ -282,6 +282,7 @@ def _tool_explain_prediction(game_pk: int) -> str:
 
 def _tool_compare_models() -> str:
     paths = [
+        _REPO_ROOT / "data" / "models" / "cv_summary_v4.json",
         _REPO_ROOT / "data" / "models" / "cv_summary_v3.json",
         _REPO_ROOT / "data" / "models" / "cv_summary_v2.json",
         _REPO_ROOT / "data" / "models" / "cv_summary.json",

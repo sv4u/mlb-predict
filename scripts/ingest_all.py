@@ -112,6 +112,16 @@ async def main() -> None:
         )
     )
 
+    # Player-level stats (FanGraphs + Statcast + biographical)
+    results.append(
+        await run_stage(
+            "player_data",
+            -1,
+            f"{sys.executable} scripts/ingest_player_data.py "
+            f"--start {min(seasons)} --end {max(seasons)}",
+        )
+    )
+
     out = Path("data/processed")
     out.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame([r.__dict__ for r in results])

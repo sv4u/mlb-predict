@@ -196,6 +196,24 @@ FEATURE_COLS: list[str] = [
     "game_humidity",
     # --- Game type (regular season vs spring training) -------------------------
     "is_spring",
+    # --- Stage 1 player model outputs (v4) ------------------------------------
+    "home_lineup_strength",
+    "away_lineup_strength",
+    "home_top3_quality",
+    "away_top3_quality",
+    "home_bottom3_quality",
+    "away_bottom3_quality",
+    "home_lineup_variance",
+    "away_lineup_variance",
+    "home_platoon_advantage",
+    "away_platoon_advantage",
+    "home_sp_quality",
+    "away_sp_quality",
+    "home_lineup_vs_sp",
+    "away_lineup_vs_sp",
+    "lineup_strength_diff",
+    "sp_quality_diff",
+    "matchup_advantage_diff",
 ]
 
 FEATURE_COLS = list(dict.fromkeys(FEATURE_COLS))
@@ -366,6 +384,7 @@ def build_feature_matrix(
     prior_api_map: dict[str, dict[str, float]],
     fg_home_map: dict[str, dict[str, float]] | None = None,
     fg_away_map: dict[str, dict[str, float]] | None = None,
+    stage1_features: pd.DataFrame | None = None,
     statcast_cache_dir: Path | None = None,
     vegas_dir: Path | None = None,
     weather_dir: Path | None = None,
@@ -640,6 +659,21 @@ def build_feature_matrix(
         "home_pit_whip", 1.30
     )
     combined["iso_diff"] = combined.get("home_bat_iso", 0.170) - combined.get("away_bat_iso", 0.170)
+
+    # --- Stage 1 player model features (v4) ----------------------------------
+    if stage1_features is not None and not stage1_features.empty:
+        from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES
+
+        for col in STAGE1_FEATURE_NAMES:
+            if col in stage1_features.columns:
+                combined[col] = stage1_features[col].values
+            else:
+                combined[col] = 0.0
+    else:
+        from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES
+
+        for col in STAGE1_FEATURE_NAMES:
+            combined[col] = 0.0
 
     combined = combined.copy()
 

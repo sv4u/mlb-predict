@@ -105,6 +105,21 @@ def main() -> None:
         action="store_true",
         help="Run feature importance (SHAP) after training and write report",
     )
+    ap.add_argument(
+        "--no-stage1",
+        action="store_true",
+        help="Disable Stage 1 player embedding model (use zero features)",
+    )
+    ap.add_argument(
+        "--gamelogs-dir",
+        type=Path,
+        default=Path("data/processed/retrosheet"),
+    )
+    ap.add_argument(
+        "--player-data-dir",
+        type=Path,
+        default=Path("data/processed/player"),
+    )
     args = ap.parse_args()
     args.model_dir.mkdir(parents=True, exist_ok=True)
 
@@ -158,6 +173,8 @@ def main() -> None:
     # -------------------------------------------------------------------------
     # Expanding-window CV
     # -------------------------------------------------------------------------
+    enable_stage1 = not args.no_stage1
+
     if not args.skip_cv:
         print("\nRunning expanding-window cross-validation…")
         cv_results = run_expanding_cv(
@@ -172,6 +189,9 @@ def main() -> None:
             time_decay=time_decay,
             platt_C=platt_C,
             spring_weight=args.spring_weight,
+            gamelogs_dir=args.gamelogs_dir,
+            player_data_dir=args.player_data_dir,
+            enable_stage1=enable_stage1,
         )
 
         all_rows = [row for rows in cv_results.values() for row in rows]
@@ -199,7 +219,7 @@ def main() -> None:
                     f"| worst {int(worst.season)} ({worst.brier:.4f})"
                 )
 
-        cv_path = args.model_dir / "cv_summary_v3.json"
+        cv_path = args.model_dir / "cv_summary_v4.json"
         cv_path.write_text(json.dumps(all_rows, indent=2), encoding="utf-8")
         print(f"\nCV summary → {cv_path}")
 
@@ -218,6 +238,9 @@ def main() -> None:
         time_decay=time_decay,
         platt_C=platt_C,
         spring_weight=args.spring_weight,
+        gamelogs_dir=args.gamelogs_dir,
+        player_data_dir=args.player_data_dir,
+        enable_stage1=enable_stage1,
     )
 
     if args.feature_importance:

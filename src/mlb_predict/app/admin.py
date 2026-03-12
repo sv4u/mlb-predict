@@ -503,7 +503,12 @@ def gather_model_status() -> dict[str, Any]:
                 )
 
     cv_summary: list[dict[str, Any]] = []
-    for name in ("cv_summary_v3.json", "cv_summary_v2.json", "cv_summary.json"):
+    for name in (
+        "cv_summary_v4.json",
+        "cv_summary_v3.json",
+        "cv_summary_v2.json",
+        "cv_summary.json",
+    ):
         p = _MODEL_DIR / name
         if p.exists():
             try:

@@ -41,6 +41,24 @@ FEATURE_LABELS: dict[str, str] = {
     "away_streak": "Away team win streak (+) / loss streak (−)",
     "home_rest_days": "Home team rest days",
     "away_rest_days": "Away team rest days",
+    # Stage 1 player model features (v4)
+    "home_lineup_strength": "Home lineup overall quality (Stage 1 neural model)",
+    "away_lineup_strength": "Away lineup overall quality (Stage 1 neural model)",
+    "home_top3_quality": "Home top-of-order batter quality (1–3 hitters)",
+    "away_top3_quality": "Away top-of-order batter quality (1–3 hitters)",
+    "home_bottom3_quality": "Home bottom-of-order batter quality (7–9 hitters)",
+    "away_bottom3_quality": "Away bottom-of-order batter quality (7–9 hitters)",
+    "home_lineup_variance": "Home lineup consistency (lower = more balanced)",
+    "away_lineup_variance": "Away lineup consistency (lower = more balanced)",
+    "home_platoon_advantage": "Home batters vs. away SP handedness advantage",
+    "away_platoon_advantage": "Away batters vs. home SP handedness advantage",
+    "home_sp_quality": "Home starting pitcher quality (Stage 1 neural model)",
+    "away_sp_quality": "Away starting pitcher quality (Stage 1 neural model)",
+    "home_lineup_vs_sp": "Home lineup matchup advantage vs. away SP",
+    "away_lineup_vs_sp": "Away lineup matchup advantage vs. home SP",
+    "lineup_strength_diff": "Lineup quality edge (home − away)",
+    "sp_quality_diff": "Pitcher quality edge (home − away)",
+    "matchup_advantage_diff": "Matchup advantage edge (home − away)",
 }
 
 # Sabermetric / stat terms (from wiki)
@@ -55,6 +73,10 @@ GLOSSARY: dict[str, str] = {
     "park factor": "Runs at this ballpark vs league average. 1.0 = neutral; Coors ~1.3, pitcher parks ~0.85.",
     "shap": "SHAP values: each feature's contribution to the prediction. Positive = pushes toward home win, negative toward away.",
     "brier": "Brier score: mean squared error of probabilities. Lower is better. 0.25 = random.",
+    "stage 1": "Stage 1 player embedding model: PyTorch neural network that encodes each batter's EWMA stats + bio into a 16-dim vector, aggregates the 9-man lineup with batting-order weights, and produces 17 game-level features for Stage 2.",
+    "xwoba": "Expected Weighted On-Base Average: Statcast metric that assigns a value to each batted ball based on exit velocity and launch angle, removing defense/luck.",
+    "barrel": "Barrel rate: % of batted balls with optimal exit velocity (≥98 mph) and launch angle (26–30°). Strongly predicts extra-base hits.",
+    "platoon": "Platoon advantage: opposite-hand batter vs. pitcher matchup. Lefty batters typically hit better vs. righty pitchers and vice versa.",
 }
 
 # One-paragraph model descriptions (for get_model_info and documentation)
@@ -64,7 +86,7 @@ MODEL_DOCS: dict[str, str] = {
     "xgboost": "XGBoost gradient boosted trees. Different regularisation from LightGBM. Often best single-model Brier. Optuna-tuned (max_depth, learning_rate, n_estimators).",
     "catboost": "CatBoost gradient boosted trees. Ordered boosting and symmetric trees. Third tree model for ensemble diversity. Optuna-tuned.",
     "mlp": "Multi-layer perceptron: 3 hidden layers (128→64→32), ReLU, Adam. Z-score normalised inputs. L2 weight decay. Captures different non-linear patterns than trees.",
-    "stacked": "Production default. Meta-learner (logistic) on top of five calibrated base model probabilities. No raw features. Disjoint calibration/meta split to prevent leakage. C=0.5.",
+    "stacked": "Production default. Meta-learner (logistic) on top of five calibrated base model probabilities. No raw features. Disjoint calibration/meta split to prevent leakage. C=0.5. v4 adds 17 Stage 1 player features from the neural embedding model.",
 }
 
 

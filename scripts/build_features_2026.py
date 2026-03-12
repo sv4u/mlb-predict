@@ -466,6 +466,24 @@ def build_2026_features(out_path: Path = _OUT) -> pd.DataFrame:
             "game_wind_mph": 5.0,
             "game_humidity": 50.0,
             "is_spring": 1.0 if game_type == "S" else 0.0,
+            # Stage 1 player model features (zeros until Stage 1 runs at prediction time)
+            "home_lineup_strength": 0.0,
+            "away_lineup_strength": 0.0,
+            "home_top3_quality": 0.0,
+            "away_top3_quality": 0.0,
+            "home_bottom3_quality": 0.0,
+            "away_bottom3_quality": 0.0,
+            "home_lineup_variance": 0.0,
+            "away_lineup_variance": 0.0,
+            "home_platoon_advantage": 0.0,
+            "away_platoon_advantage": 0.0,
+            "home_sp_quality": 0.0,
+            "away_sp_quality": 0.0,
+            "home_lineup_vs_sp": 0.0,
+            "away_lineup_vs_sp": 0.0,
+            "lineup_strength_diff": 0.0,
+            "sp_quality_diff": 0.0,
+            "matchup_advantage_diff": 0.0,
         }
         row["feature_hash"] = _feature_hash(row)
         rows.append(row)

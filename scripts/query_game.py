@@ -170,7 +170,9 @@ def _load_model(model_dir: Path = Path("data/models"), model_type: str = "stacke
     """Load the production model."""
     from mlb_predict.model.artifacts import latest_artifact, load_model
 
-    art = latest_artifact(model_type, model_dir=model_dir, version="v3")
+    art = latest_artifact(model_type, model_dir=model_dir, version="v4")
+    if art is None:
+        art = latest_artifact(model_type, model_dir=model_dir, version="v3")
     if art is None:
         sys.exit(f"No '{model_type}' production model found.  Run train_model.py first.")
     return load_model(art)
@@ -214,6 +216,24 @@ _FEATURE_LABELS: dict[str, str] = {
     "away_streak": "Away team win streak (+) / loss streak (−)",
     "home_rest_days": "Home team rest days",
     "away_rest_days": "Away team rest days",
+    # Stage 1 player model features (v4)
+    "home_lineup_strength": "Home lineup overall quality (Stage 1)",
+    "away_lineup_strength": "Away lineup overall quality (Stage 1)",
+    "home_top3_quality": "Home top-of-order quality (1–3 hitters)",
+    "away_top3_quality": "Away top-of-order quality (1–3 hitters)",
+    "home_bottom3_quality": "Home bottom-of-order quality (7–9)",
+    "away_bottom3_quality": "Away bottom-of-order quality (7–9)",
+    "home_lineup_variance": "Home lineup consistency",
+    "away_lineup_variance": "Away lineup consistency",
+    "home_platoon_advantage": "Home platoon advantage vs. away SP",
+    "away_platoon_advantage": "Away platoon advantage vs. home SP",
+    "home_sp_quality": "Home starter quality (Stage 1)",
+    "away_sp_quality": "Away starter quality (Stage 1)",
+    "home_lineup_vs_sp": "Home lineup vs. away SP matchup",
+    "away_lineup_vs_sp": "Away lineup vs. home SP matchup",
+    "lineup_strength_diff": "Lineup quality edge (home − away)",
+    "sp_quality_diff": "Pitcher quality edge (home − away)",
+    "matchup_advantage_diff": "Matchup advantage edge (home − away)",
 }
 
 

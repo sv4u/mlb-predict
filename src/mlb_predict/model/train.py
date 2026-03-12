@@ -45,10 +45,161 @@ from catboost import CatBoostClassifier
 from mlb_predict.features.builder import FEATURE_COLS
 from mlb_predict.model.artifacts import ModelMetadata, load_model, save_model
 from mlb_predict.model.evaluate import evaluate, EvalResult
+from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES
 
 logger = logging.getLogger(__name__)
 
-_FEATURE_VERSION = "v3"
+
+# ---------------------------------------------------------------------------
+# Stage 1 integration
+# ---------------------------------------------------------------------------
+
+
+def _load_stage1_inputs(
+    gamelogs_dir: Path,
+    player_dir: Path,
+    seasons: list[int],
+) -> dict[str, Any] | None:
+    """Load gamelogs, rolling stats, and bio data needed for Stage 1.
+
+    Returns None if player data is unavailable (graceful v3 fallback).
+    """
+
+    from mlb_predict.player.biographical import build_bio_lookup, build_biographical_df
+    from mlb_predict.player.rolling import build_batter_rolling, build_pitcher_rolling
+
+    bio_path = player_dir / "biographical.parquet"
+    if not bio_path.exists():
+        bio_df = build_biographical_df(cache_dir=player_dir)
+    else:
+        bio_df = pd.read_parquet(bio_path)
+
+    if bio_df.empty:
+        logger.info("No biographical data available; skipping Stage 1")
+        return None
+
+    bio_lookup = build_bio_lookup(bio_df)
+
+    retro_to_mlbam: dict[str, int] = {}
+    for _, row in bio_df.iterrows():
+        retro_id = row.get("retro_id")
+        mlbam = row.get("mlbam_id")
+        if pd.notna(retro_id) and pd.notna(mlbam):
+            retro_to_mlbam[str(retro_id).strip().lower()] = int(mlbam)
+
+    gamelogs_frames = []
+    for s in seasons:
+        path = gamelogs_dir / f"gamelogs_{s}.parquet"
+        if path.exists():
+            gamelogs_frames.append(pd.read_parquet(path))
+
+    if not gamelogs_frames:
+        logger.info("No gamelogs found for Stage 1; skipping")
+        return None
+
+    all_gamelogs = pd.concat(gamelogs_frames, ignore_index=True)
+
+    batter_rolling = build_batter_rolling(all_gamelogs, retro_to_mlbam=retro_to_mlbam)
+    pitcher_rolling = build_pitcher_rolling(all_gamelogs, retro_to_mlbam=retro_to_mlbam)
+
+    return {
+        "gamelogs": all_gamelogs,
+        "batter_rolling": batter_rolling,
+        "pitcher_rolling": pitcher_rolling,
+        "bio_lookup": bio_lookup,
+        "retro_to_mlbam": retro_to_mlbam,
+    }
+
+
+def _train_stage1_and_generate(
+    stage1_data: dict[str, Any],
+    train_gamelogs: pd.DataFrame,
+    target_gamelogs: pd.DataFrame,
+    target_season_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Train Stage 1 on train_gamelogs, generate features for target_season_df.
+
+    Returns a copy of target_season_df with Stage 1 features populated.
+    """
+    from mlb_predict.player.embeddings import PlayerVocab
+    from mlb_predict.player.lineup_model import (
+        generate_stage1_features,
+        prepare_game_tensors,
+        stage1_features_to_df,
+        train_stage1,
+    )
+
+    vocab = PlayerVocab()
+    bio_lookup = stage1_data["bio_lookup"]
+    retro_to_mlbam = stage1_data["retro_to_mlbam"]
+    batter_rolling = stage1_data["batter_rolling"]
+    pitcher_rolling = stage1_data["pitcher_rolling"]
+
+    train_tensors = prepare_game_tensors(
+        train_gamelogs,
+        batter_rolling,
+        pitcher_rolling,
+        bio_lookup,
+        retro_to_mlbam,
+        vocab,
+        train_mode=True,
+    )
+
+    if train_tensors is None or train_tensors["valid_mask"].sum() < 100:
+        logger.warning("Insufficient Stage 1 training data; using zero features")
+        return target_season_df
+
+    val_size = max(int(0.15 * train_tensors["valid_mask"].sum()), 200)
+    n_valid = int(train_tensors["valid_mask"].sum())
+    if n_valid > val_size + 200:
+        valid_indices = train_tensors["valid_mask"].nonzero(as_tuple=True)[0]
+        val_indices = valid_indices[-val_size:]
+        val_mask = train_tensors["valid_mask"].clone()
+        val_mask[:] = False
+        val_mask[val_indices] = True
+        train_mask = train_tensors["valid_mask"].clone()
+        train_mask[val_indices] = False
+
+        val_tensors = {k: v.clone() for k, v in train_tensors.items()}
+        val_tensors["valid_mask"] = val_mask
+        train_tensors["valid_mask"] = train_mask
+    else:
+        val_tensors = None
+
+    model = train_stage1(train_tensors, vocab, val_tensors=val_tensors)
+
+    target_tensors = prepare_game_tensors(
+        target_gamelogs,
+        batter_rolling,
+        pitcher_rolling,
+        bio_lookup,
+        retro_to_mlbam,
+        vocab,
+        train_mode=False,
+    )
+
+    if target_tensors is None:
+        return target_season_df
+
+    features = generate_stage1_features(model, target_tensors)
+    features_df = stage1_features_to_df(features)
+
+    result = target_season_df.copy()
+    if len(features_df) == len(result):
+        for col in STAGE1_FEATURE_NAMES:
+            if col in features_df.columns:
+                result[col] = features_df[col].values
+    else:
+        logger.warning(
+            "Stage 1 feature count mismatch: %d features vs %d games; using zeros",
+            len(features_df),
+            len(result),
+        )
+
+    return result
+
+
+_FEATURE_VERSION = "v4"
 
 _LR_PARAMS: dict[str, Any] = {
     "C": 1.0,
@@ -606,8 +757,16 @@ def run_expanding_cv(
     time_decay: float | None = None,
     platt_C: float | None = None,
     spring_weight: float = _DEFAULT_SPRING_WEIGHT,
+    gamelogs_dir: Path = Path("data/processed/retrosheet"),
+    player_data_dir: Path = Path("data/processed/player"),
+    enable_stage1: bool = True,
 ) -> dict[str, list[dict]]:
-    """Expanding-window CV with time-weighted training and Platt calibration."""
+    """Expanding-window CV with time-weighted training and Platt calibration.
+
+    When *enable_stage1* is True and player data files exist, the Stage 1
+    player embedding model is trained at each fold (on train seasons) and its
+    17 features are injected before fitting Stage 2 models.
+    """
     model_types = model_types or ["logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"]
     decay = time_decay if time_decay is not None else _TIME_DECAY
     cal_C = platt_C if platt_C is not None else 1.0
@@ -627,11 +786,49 @@ def run_expanding_cv(
     seasons = sorted(season_dfs)
     results: dict[str, list[dict]] = {mt: [] for mt in model_types}
 
+    # Stage 1: load player data inputs once (shared across folds)
+    stage1_data: dict[str, Any] | None = None
+    if enable_stage1:
+        try:
+            stage1_data = _load_stage1_inputs(gamelogs_dir, player_data_dir, seasons)
+        except Exception as exc:
+            logger.warning("Stage 1 data loading failed: %s; proceeding without", exc)
+
     for i, eval_season in enumerate(seasons):
         if i < min_train_seasons:
             continue
 
         train_seasons = seasons[:i]
+
+        # --- Stage 1: train on train_seasons, inject into both train and eval --
+        if stage1_data is not None:
+            train_gl = stage1_data["gamelogs"]
+            train_gl["date"] = pd.to_datetime(train_gl["date"])
+            train_gl_mask = train_gl["date"].dt.year.isin(train_seasons)
+            eval_gl_mask = train_gl["date"].dt.year == eval_season
+
+            if train_gl_mask.any() and eval_gl_mask.any():
+                # Inject Stage 1 into eval season
+                season_dfs[eval_season] = _train_stage1_and_generate(
+                    stage1_data,
+                    train_gamelogs=train_gl[train_gl_mask],
+                    target_gamelogs=train_gl[eval_gl_mask],
+                    target_season_df=season_dfs[eval_season],
+                )
+                # Inject Stage 1 into training data
+                for ts in train_seasons:
+                    ts_gl_mask = train_gl["date"].dt.year == ts
+                    if ts_gl_mask.any():
+                        earlier = [s for s in train_seasons if s < ts]
+                        if len(earlier) >= 2:
+                            earlier_gl_mask = train_gl["date"].dt.year.isin(earlier)
+                            season_dfs[ts] = _train_stage1_and_generate(
+                                stage1_data,
+                                train_gamelogs=train_gl[earlier_gl_mask],
+                                target_gamelogs=train_gl[ts_gl_mask],
+                                target_season_df=season_dfs[ts],
+                            )
+
         train_df = pd.concat([season_dfs[s] for s in train_seasons], ignore_index=True)
         X_train, y_train, w_train = _prep(
             train_df,
@@ -766,13 +963,74 @@ def train_production_model(
     time_decay: float | None = None,
     platt_C: float | None = None,
     spring_weight: float = _DEFAULT_SPRING_WEIGHT,
+    gamelogs_dir: Path = Path("data/processed/retrosheet"),
+    player_data_dir: Path = Path("data/processed/player"),
+    enable_stage1: bool = True,
 ) -> dict[str, Any]:
-    """Train calibrated production models on all available seasons."""
+    """Train calibrated production models on all available seasons.
+
+    When *enable_stage1* is True, trains the Stage 1 player embedding model
+    on all seasons and saves the model alongside Stage 2 artifacts.
+    """
     model_types = model_types or ["logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"]
     decay = time_decay if time_decay is not None else _TIME_DECAY
     cal_C = platt_C if platt_C is not None else 1.0
 
     season_frames = _load_all_feature_files(features_dir)
+
+    # --- Stage 1 for production: train on all data, inject features ----------
+    if enable_stage1:
+        try:
+            seasons_list = sorted(season_frames.keys())
+            stage1_data = _load_stage1_inputs(gamelogs_dir, player_data_dir, seasons_list)
+            if stage1_data is not None:
+                train_gl = stage1_data["gamelogs"]
+                train_gl["date"] = pd.to_datetime(train_gl["date"])
+                for s in seasons_list:
+                    s_gl_mask = train_gl["date"].dt.year == s
+                    earlier = [ss for ss in seasons_list if ss < s]
+                    if len(earlier) >= 2 and s_gl_mask.any():
+                        earlier_gl_mask = train_gl["date"].dt.year.isin(earlier)
+                        season_frames[s] = _train_stage1_and_generate(
+                            stage1_data,
+                            train_gamelogs=train_gl[earlier_gl_mask],
+                            target_gamelogs=train_gl[s_gl_mask],
+                            target_season_df=season_frames[s],
+                        )
+                # Save Stage 1 production model
+                from mlb_predict.player.embeddings import (
+                    PlayerVocab,
+                    save_stage1_model,
+                )
+                from mlb_predict.player.lineup_model import (
+                    prepare_game_tensors,
+                    train_stage1,
+                )
+
+                vocab = PlayerVocab()
+                all_tensors = prepare_game_tensors(
+                    train_gl,
+                    stage1_data["batter_rolling"],
+                    stage1_data["pitcher_rolling"],
+                    stage1_data["bio_lookup"],
+                    stage1_data["retro_to_mlbam"],
+                    vocab,
+                    train_mode=True,
+                )
+                if all_tensors is not None:
+                    prod_model = train_stage1(all_tensors, vocab)
+                    s1_dir = (
+                        model_dir / f"player_embedding_{_FEATURE_VERSION}_train{max(seasons_list)}"
+                    )
+                    save_stage1_model(
+                        prod_model,
+                        vocab,
+                        s1_dir,
+                        metadata={"training_seasons": seasons_list},
+                    )
+                    logger.info("Stage 1 production model saved to %s", s1_dir)
+        except Exception as exc:
+            logger.warning("Stage 1 production training failed: %s; proceeding without", exc)
     feat_cols = _available_features(season_frames)
     logger.info(
         "Production training using %d features (of %d FEATURE_COLS)",

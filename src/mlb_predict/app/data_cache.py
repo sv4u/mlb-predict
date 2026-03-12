@@ -115,7 +115,10 @@ def available_model_types() -> list[str]:
 
     types = []
     for mt in ("logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"):
-        if latest_artifact(mt, model_dir=_MODEL_DIR, version="v3") is not None:
+        if (
+            latest_artifact(mt, model_dir=_MODEL_DIR, version="v4") is not None
+            or latest_artifact(mt, model_dir=_MODEL_DIR, version="v3") is not None
+        ):
             types.append(mt)
     return types
 
@@ -134,7 +137,9 @@ def switch_model(model_type: str) -> None:
     from mlb_predict.model.artifacts import latest_artifact, load_model
     from mlb_predict.model.train import _predict_proba
 
-    art = latest_artifact(model_type, model_dir=_MODEL_DIR, version="v3")
+    art = latest_artifact(model_type, model_dir=_MODEL_DIR, version="v4")
+    if art is None:
+        art = latest_artifact(model_type, model_dir=_MODEL_DIR, version="v3")
     if art is None:
         raise RuntimeError(f"No trained artifact found for model type '{model_type}'.")
 
@@ -181,6 +186,98 @@ def switch_model(model_type: str) -> None:
     )
 
 
+def _inject_stage1_features_at_startup(
+    features: pd.DataFrame,
+    meta: object,
+) -> pd.DataFrame:
+    """Run Stage 1 inference to populate player features in the feature DataFrame.
+
+    Called once during startup.  If Stage 1 model or player data is unavailable,
+    returns the DataFrame unchanged (features remain at 0.0).
+    """
+    if meta is None or getattr(meta, "feature_set_version", "") != "v4":
+        return features
+
+    try:
+        from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES, load_stage1_model
+        from mlb_predict.player.biographical import build_biographical_df, build_bio_lookup
+        from mlb_predict.player.rolling import build_batter_rolling, build_pitcher_rolling
+        from mlb_predict.player.lineup_model import (
+            prepare_game_tensors,
+            generate_stage1_features,
+        )
+
+        s1_dirs = sorted(_MODEL_DIR.glob("player_embedding_v4_*"))
+        if not s1_dirs:
+            logger.info("No Stage 1 model found; serving with zero player features")
+            return features
+
+        model, vocab = load_stage1_model(s1_dirs[-1])
+        player_dir = _PROCESSED_DIR / "player"
+        gamelogs_dir = _PROCESSED_DIR / "retrosheet"
+
+        bio_df = build_biographical_df(cache_dir=player_dir)
+        if bio_df.empty:
+            logger.info("No biographical data; skipping Stage 1 at startup")
+            return features
+
+        bio_lookup = build_bio_lookup(bio_df)
+        retro_to_mlbam: dict[str, int] = {}
+        for _, row in bio_df.iterrows():
+            retro_id = row.get("retro_id")
+            mlbam = row.get("mlbam_id")
+            if pd.notna(retro_id) and pd.notna(mlbam):
+                retro_to_mlbam[str(retro_id).strip().lower()] = int(mlbam)
+
+        all_seasons = sorted(
+            int(f.stem.split("_")[1])
+            for f in gamelogs_dir.glob("gamelogs_*.parquet")
+            if "spring" not in f.stem
+        )
+        if not all_seasons:
+            logger.info("No gamelogs found; skipping Stage 1 at startup")
+            return features
+
+        gl_frames = [pd.read_parquet(gamelogs_dir / f"gamelogs_{s}.parquet") for s in all_seasons]
+        all_gl = pd.concat(gl_frames, ignore_index=True)
+        batter_rolling = build_batter_rolling(all_gl, retro_to_mlbam=retro_to_mlbam)
+        pitcher_rolling = build_pitcher_rolling(all_gl, retro_to_mlbam=retro_to_mlbam)
+
+        injected = 0
+        for season in all_seasons:
+            gl_season = all_gl[pd.to_datetime(all_gl["date"]).dt.year == season]
+            if gl_season.empty:
+                continue
+
+            tensors = prepare_game_tensors(
+                gl_season,
+                batter_rolling,
+                pitcher_rolling,
+                bio_lookup,
+                retro_to_mlbam,
+                vocab,
+                train_mode=False,
+            )
+            if tensors is None:
+                continue
+
+            s1_feats = generate_stage1_features(model, tensors)
+            season_mask = features["season"] == season
+            n_season = int(season_mask.sum())
+
+            if s1_feats.shape[0] == n_season and n_season > 0:
+                for j, col in enumerate(STAGE1_FEATURE_NAMES):
+                    if col in features.columns:
+                        features.loc[season_mask, col] = s1_feats[:, j]
+                injected += n_season
+
+        logger.info("Stage 1 features injected for %d games at startup", injected)
+    except Exception as exc:
+        logger.warning("Stage 1 startup injection failed: %s; serving with zero features", exc)
+
+    return features
+
+
 def is_ready() -> bool:
     """Return True if data and model are loaded and the app can serve requests."""
     return _app_ready
@@ -216,11 +313,16 @@ def startup(model_type: str = "logistic") -> None:
         from mlb_predict.model.artifacts import latest_artifact, load_model
         from mlb_predict.model.train import _predict_proba
 
-        art = latest_artifact(model_type, model_dir=_MODEL_DIR, version="v3")
+        art = latest_artifact(model_type, model_dir=_MODEL_DIR, version="v4")
+        if art is None:
+            art = latest_artifact(model_type, model_dir=_MODEL_DIR, version="v3")
         if art is None:
             raise RuntimeError(f"No production model found for type '{model_type}'.")
         _model, _meta = load_model(art)
         _feature_cols = _meta.feature_cols
+
+        # Stage 1: populate player model features if a trained model exists
+        _features = _inject_stage1_features_at_startup(_features, _meta)
 
         _features = _features.copy()
         _features["prob"] = np.nan
