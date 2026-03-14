@@ -80,6 +80,50 @@
     .perf-table tr:hover td { background: var(--card); }
     .perf-table .best { color: var(--green); font-weight: 700; }
 
+    .cl-toggle { display: inline-flex; gap: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 1.25rem; }
+    .cl-toggle button {
+      padding: 0.4rem 1rem; font-size: 0.82rem; font-weight: 600;
+      background: var(--surface); color: var(--muted); border: none; cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .cl-toggle button:not(:last-child) { border-right: 1px solid var(--border); }
+    .cl-toggle button.active { background: var(--accent); color: #fff; }
+    .cl-toggle button:hover:not(.active) { background: var(--card); color: var(--text); }
+
+    .cl-view { display: none; }
+    .cl-view.active { display: block; }
+
+    .cl-date-group { margin-bottom: 1.5rem; }
+    .cl-date-heading { font-size: 0.92rem; font-weight: 700; color: var(--text); margin-bottom: 0.5rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border); }
+    .cl-cat-heading { font-size: 1rem; font-weight: 700; color: var(--accent); margin: 1.5rem 0 0.5rem; }
+    .cl-cat-heading:first-child { margin-top: 0; }
+
+    .cl-entry { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.3rem 0; font-size: 0.84rem; line-height: 1.55; }
+    .cl-hash { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.76rem; color: var(--muted); flex-shrink: 0; }
+    .cl-scope { font-weight: 600; color: var(--accent); }
+    .cl-breaking { color: var(--red, #e74c3c); font-weight: 700; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .04em; }
+    .cl-desc { color: var(--text); }
+    .cl-date-badge { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.72rem; color: var(--muted); flex-shrink: 0; }
+    .cl-type-badge {
+      display: inline-block; padding: 0.1rem 0.35rem; border-radius: 3px;
+      font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; flex-shrink: 0;
+    }
+    .cl-type-feat { background: rgba(46,204,113,.12); color: var(--green); }
+    .cl-type-fix { background: rgba(231,76,60,.12); color: var(--red, #e74c3c); }
+    .cl-type-perf { background: rgba(155,89,182,.12); color: var(--purple); }
+    .cl-type-refactor { background: rgba(79,142,247,.12); color: var(--accent); }
+    .cl-type-docs { background: rgba(243,156,18,.12); color: var(--orange); }
+    .cl-type-style { background: rgba(149,165,166,.12); color: var(--muted); }
+    .cl-type-ci { background: rgba(52,152,219,.12); color: #3498db; }
+    .cl-type-chore { background: rgba(149,165,166,.12); color: var(--muted); }
+    .cl-type-config { background: rgba(241,196,15,.12); color: var(--gold); }
+    .cl-type-test { background: rgba(46,204,113,.12); color: #27ae60; }
+    .cl-type-build { background: rgba(243,156,18,.12); color: var(--orange); }
+    .cl-type-other { background: rgba(149,165,166,.12); color: var(--muted); }
+
+    .cl-stat { display: inline-flex; gap: 1.25rem; margin-bottom: 1rem; font-size: 0.82rem; color: var(--muted); }
+    .cl-stat strong { color: var(--text); }
+
     html { scroll-behavior: smooth; scroll-padding-top: 80px; }
 
     @media (max-width: 768px) {
@@ -220,6 +264,12 @@
       </ul>
     </li>
     <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#changelog">Changelog</a>
+      <ul class="sub">
+        <li><a href="#cl-by-date">By Date</a></li>
+        <li><a href="#cl-by-category">By Category</a></li>
+      </ul>
+    </li>
   </ul>
 </aside>
 
@@ -1340,16 +1390,103 @@ Live standings data ──▶ MLB Stats API (wins, losses, batting stats, pitchi
   their source URLs and SHA256 hashes).
 </div>
 
+<!-- ================================================================== -->
+<h2 id="changelog">Changelog</h2>
+
+<p>
+  Historical evolution of the project, derived from the Git commit history. Toggle
+  between a <strong>chronological</strong> view (grouped by date) and a
+  <strong>categorical</strong> view (grouped by change type).
+</p>
+
+{% set ns = namespace(feats=0, fixes=0, other=0) %}
+{% for c in changelog %}
+{% if c.type == 'feat' %}{% set ns.feats = ns.feats + 1 %}
+{% elif c.type == 'fix' %}{% set ns.fixes = ns.fixes + 1 %}
+{% else %}{% set ns.other = ns.other + 1 %}{% endif %}
+{% endfor %}
+<div class="cl-stat">
+  <span><strong>{{ changelog|length }}</strong> commits</span>
+  <span><strong>{{ ns.feats }}</strong> features</span>
+  <span><strong>{{ ns.fixes }}</strong> fixes</span>
+  <span><strong>{{ ns.other }}</strong> other</span>
+</div>
+
+<div class="cl-toggle">
+  <button class="active" onclick="clView('date', this)">By Date</button>
+  <button onclick="clView('category', this)">By Category</button>
+</div>
+
+<!-- ---- By Date view ---- -->
+<div id="cl-by-date" class="cl-view active">
+
+  {% set current_date = namespace(val='') %}
+  {% for c in changelog %}
+  {% if c.date != current_date.val %}
+  {% if current_date.val != '' %}</div>{% endif %}
+{% set current_date.val = c.date %}
+<div class="cl-date-group">
+  <div class="cl-date-heading">{{ c.date }}</div>
+  {% endif %}
+  <div class="cl-entry">
+    <span class="cl-hash">{{ c.hash }}</span>
+    <span class="cl-type-badge cl-type-{{ c.type }}">{{ c.type }}</span>
+    {% if c.breaking %}<span class="cl-breaking">breaking</span>{% endif %}
+    {% if c.scope %}<span class="cl-scope">({{ c.scope }})</span>{% endif %}
+    <span class="cl-desc">{{ c.description }}</span>
+  </div>
+  {% endfor %}
+  {% if current_date.val != '' %}
+</div>{% endif %}
+
+</div>
+
+<!-- ---- By Category view ---- -->
+<div id="cl-by-category" class="cl-view">
+
+  {% set type_order = ['feat', 'fix', 'perf', 'refactor', 'docs', 'style', 'ci', 'config', 'chore', 'test', 'build',
+  'other'] %}
+  {% set type_labels = {'feat': 'Features', 'fix': 'Bug Fixes', 'perf': 'Performance', 'refactor': 'Refactoring',
+  'docs': 'Documentation', 'style': 'Style', 'ci': 'CI / CD', 'config': 'Configuration', 'chore': 'Chores', 'test':
+  'Tests', 'build': 'Build', 'other': 'Other'} %}
+
+  {% for t in type_order %}
+  {% set entries = changelog | selectattr('type', 'equalto', t) | list %}
+  {% if entries %}
+  <h3 class="cl-cat-heading" id="cl-cat-{{ t }}">{{ type_labels.get(t, t | capitalize) }} ({{ entries|length }})</h3>
+  {% for c in entries %}
+  <div class="cl-entry">
+    <span class="cl-hash">{{ c.hash }}</span>
+    <span class="cl-date-badge">{{ c.date }}</span>
+    {% if c.breaking %}<span class="cl-breaking">breaking</span>{% endif %}
+    {% if c.scope %}<span class="cl-scope">({{ c.scope }})</span>{% endif %}
+    <span class="cl-desc">{{ c.description }}</span>
+  </div>
+  {% endfor %}
+  {% endif %}
+  {% endfor %}
+
+</div>
+
 </main>
 </div>
 
 <script>
+      function clView(view, btn) {
+        document.querySelectorAll('.cl-view').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.cl-toggle button').forEach(b => b.classList.remove('active'));
+        document.getElementById('cl-by-' + view).classList.add('active');
+        btn.classList.add('active');
+      }
+
 const tocLinks = document.querySelectorAll('.wiki-sidebar a[href^="#"]');
 const sections = Array.from(tocLinks).map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
 
 function updateActive() {
   let current = '';
   for (const s of sections) {
+    if (s.offsetParent === null && !s.closest('.content')) continue;
+    if (s.closest('.cl-view') && !s.closest('.cl-view.active')) continue;
     if (s.getBoundingClientRect().top <= 120) current = s.id;
   }
   tocLinks.forEach(a => {

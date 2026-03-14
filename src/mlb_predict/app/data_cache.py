@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
@@ -63,6 +64,85 @@ def _resolve_git_commit() -> str:
 def get_git_commit() -> str:
     """Return the resolved git commit hash."""
     return _git_commit
+
+
+_COMMIT_RE = re.compile(
+    r"^(?P<type>\w+)"
+    r"(?:\((?P<scope>[^)]+)\))?"
+    r"(?P<breaking>!)?"
+    r":\s*(?P<desc>.+)$",
+)
+
+_TYPE_LABELS: dict[str, str] = {
+    "feat": "Features",
+    "fix": "Bug Fixes",
+    "perf": "Performance",
+    "refactor": "Refactoring",
+    "docs": "Documentation",
+    "style": "Style",
+    "ci": "CI / CD",
+    "chore": "Chores",
+    "config": "Configuration",
+    "test": "Tests",
+    "build": "Build",
+}
+
+
+def _parse_commit_message(message: str) -> dict[str, str]:
+    """Parse a conventional commit message into type, scope, and description."""
+    m = _COMMIT_RE.match(message)
+    if not m:
+        return {"type": "other", "scope": "", "description": message, "breaking": ""}
+    raw_type = m.group("type")
+    return {
+        "type": raw_type if raw_type in _TYPE_LABELS else "other",
+        "scope": m.group("scope") or "",
+        "description": m.group("desc"),
+        "breaking": "!" if m.group("breaking") else "",
+    }
+
+
+_changelog_cache: list[dict[str, str]] | None = None
+
+
+def get_changelog() -> list[dict[str, str]]:
+    """Return the parsed git commit log, cached after first call.
+
+    Each entry: {hash, date, type, scope, description, breaking, message}.
+    """
+    global _changelog_cache  # noqa: PLW0603
+    if _changelog_cache is not None:
+        return _changelog_cache
+
+    entries: list[dict[str, str]] = []
+    try:
+        result = subprocess.run(
+            ["git", "log", "--format=%H|%ad|%s", "--date=short", "--reverse"],
+            capture_output=True,
+            text=True,
+            cwd=str(_REPO_ROOT),
+            timeout=10,
+        )
+        if result.returncode != 0:
+            _changelog_cache = entries
+            return entries
+        for line in result.stdout.strip().splitlines():
+            parts = line.split("|", 2)
+            if len(parts) != 3:
+                continue
+            sha, date, message = parts
+            parsed = _parse_commit_message(message)
+            entries.append({
+                "hash": sha[:8],
+                "date": date,
+                "message": message,
+                **parsed,
+            })
+    except Exception:
+        logger.warning("Failed to read git log for changelog", exc_info=True)
+    entries.reverse()
+    _changelog_cache = entries
+    return entries
 
 
 # Retrosheet code → full name

@@ -37,6 +37,7 @@ from mlb_predict.app.data_cache import (
     TEAM_NAMES,
     available_model_types,
     get_active_model_type,
+    get_changelog,
     get_features,
     get_git_commit,
     get_model,
@@ -1299,7 +1300,9 @@ async def page_wiki(request: Request):
     """Technical wiki describing models, data sources, and training pipeline."""
     if not is_ready():
         return _init_page(request)
-    return templates.TemplateResponse("wiki.html", _ctx(request))
+    return templates.TemplateResponse(
+        "wiki.html", _ctx(request, changelog=get_changelog()),
+    )
 
 
 @app.get("/odds", response_class=HTMLResponse)
