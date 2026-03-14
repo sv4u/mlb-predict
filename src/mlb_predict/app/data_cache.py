@@ -316,8 +316,7 @@ def _load_features_duckdb() -> pd.DataFrame | None:
 def _load_features_parquet() -> pd.DataFrame:
     """Load features from individual Parquet files (fallback path)."""
     frames = [
-        pd.read_parquet(f)
-        for f in sorted((_PROCESSED_DIR / "features").glob("features_*.parquet"))
+        pd.read_parquet(f) for f in sorted((_PROCESSED_DIR / "features").glob("features_*.parquet"))
     ]
     if not frames:
         raise RuntimeError("No feature files found.  Run build_features.py first.")

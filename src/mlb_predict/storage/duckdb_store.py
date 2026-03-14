@@ -78,10 +78,13 @@ class DuckDBStore:
         """)
 
     def _features_table_exists(self) -> bool:
-        return self._scalar(
-            "SELECT count(*) FROM information_schema.tables "
-            "WHERE table_schema = 'main' AND table_name = 'features'"
-        ) > 0
+        return (
+            self._scalar(
+                "SELECT count(*) FROM information_schema.tables "
+                "WHERE table_schema = 'main' AND table_name = 'features'"
+            )
+            > 0
+        )
 
     def feature_count(self) -> int:
         """Return the number of rows in the features table, or 0 if it doesn't exist."""
@@ -118,7 +121,9 @@ class DuckDBStore:
         if table == "features":
             return self._ingest_features(parquet_path, season=season, replace_season=replace_season)
 
-        return self._ingest_generic(table, parquet_path, season=season, replace_season=replace_season)
+        return self._ingest_generic(
+            table, parquet_path, season=season, replace_season=replace_season
+        )
 
     def _ingest_features(
         self,
@@ -172,10 +177,13 @@ class DuckDBStore:
 
         Returns the number of rows actually inserted (not the total table size).
         """
-        table_exists = self._scalar(
-            "SELECT count(*) FROM information_schema.tables WHERE table_name = ?",
-            [table],
-        ) > 0
+        table_exists = (
+            self._scalar(
+                "SELECT count(*) FROM information_schema.tables WHERE table_name = ?",
+                [table],
+            )
+            > 0
+        )
 
         if not table_exists:
             self._conn.execute(f"""
@@ -341,11 +349,14 @@ class DuckDBStore:
     def export_parquet(self, table: str, output_path: Path) -> None:
         """Export a DuckDB table back to Parquet for interoperability."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        has_source_file = self._scalar(
-            "SELECT count(*) FROM information_schema.columns "
-            "WHERE table_schema = 'main' AND table_name = ? AND column_name = '_source_file'",
-            [table],
-        ) > 0
+        has_source_file = (
+            self._scalar(
+                "SELECT count(*) FROM information_schema.columns "
+                "WHERE table_schema = 'main' AND table_name = ? AND column_name = '_source_file'",
+                [table],
+            )
+            > 0
+        )
         exclude = " EXCLUDE (_source_file)" if has_source_file else ""
         self._conn.execute(f"""
             COPY (SELECT *{exclude} FROM {table})

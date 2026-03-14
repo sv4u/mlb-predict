@@ -525,15 +525,19 @@ def build_feature_matrix(
         },
         index=gl.index,
     )
-    parts.extend([base, ctx, elo_season.reset_index(drop=True), team_feats_season.reset_index(drop=True)])
+    parts.extend(
+        [base, ctx, elo_season.reset_index(drop=True), team_feats_season.reset_index(drop=True)]
+    )
 
     if lineup_season is not None:
         parts.append(lineup_season.reset_index(drop=True))
     else:
-        parts.append(pd.DataFrame(
-            {"home_lineup_continuity": 4.5, "away_lineup_continuity": 4.5},
-            index=gl.index,
-        ))
+        parts.append(
+            pd.DataFrame(
+                {"home_lineup_continuity": 4.5, "away_lineup_continuity": 4.5},
+                index=gl.index,
+            )
+        )
 
     # --- Bullpen usage / ERA proxy (optional) ---------------------------------
     if (
@@ -547,20 +551,36 @@ def build_feature_matrix(
         except Exception as exc:
             logger.warning("Bullpen feature computation failed for season %d: %s", season, exc)
             bp_defaults = {}
-            for c in ["home_bullpen_usage_15", "home_bullpen_usage_30",
-                       "away_bullpen_usage_15", "away_bullpen_usage_30"]:
+            for c in [
+                "home_bullpen_usage_15",
+                "home_bullpen_usage_30",
+                "away_bullpen_usage_15",
+                "away_bullpen_usage_30",
+            ]:
                 bp_defaults[c] = 2.0
-            for c in ["home_bullpen_era_proxy_15", "home_bullpen_era_proxy_30",
-                       "away_bullpen_era_proxy_15", "away_bullpen_era_proxy_30"]:
+            for c in [
+                "home_bullpen_era_proxy_15",
+                "home_bullpen_era_proxy_30",
+                "away_bullpen_era_proxy_15",
+                "away_bullpen_era_proxy_30",
+            ]:
                 bp_defaults[c] = 4.5
             parts.append(pd.DataFrame(bp_defaults, index=gl.index))
     else:
         bp_defaults = {}
-        for c in ["home_bullpen_usage_15", "home_bullpen_usage_30",
-                   "away_bullpen_usage_15", "away_bullpen_usage_30"]:
+        for c in [
+            "home_bullpen_usage_15",
+            "home_bullpen_usage_30",
+            "away_bullpen_usage_15",
+            "away_bullpen_usage_30",
+        ]:
             bp_defaults[c] = 2.0
-        for c in ["home_bullpen_era_proxy_15", "home_bullpen_era_proxy_30",
-                   "away_bullpen_era_proxy_15", "away_bullpen_era_proxy_30"]:
+        for c in [
+            "home_bullpen_era_proxy_15",
+            "home_bullpen_era_proxy_30",
+            "away_bullpen_era_proxy_15",
+            "away_bullpen_era_proxy_30",
+        ]:
             bp_defaults[c] = 4.5
         parts.append(pd.DataFrame(bp_defaults, index=gl.index))
 
