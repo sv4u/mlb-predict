@@ -57,6 +57,13 @@ class DuckDBStore:
         self._ensure_schema()
         logger.info("DuckDB store opened: %s", self._db_path)
 
+    def _scalar(self, query: str, params: list[Any] | None = None) -> Any:
+        """Execute a query and return the first column of the first row."""
+        row = self._conn.execute(query, params or []).fetchone()
+        if row is None:
+            raise RuntimeError(f"Expected a result row from: {query}")
+        return row[0]
+
     def _ensure_schema(self) -> None:
         """Create metadata tables.  The features table schema is derived from
         the first ingested Parquet file so it matches all ~143 columns."""
@@ -71,16 +78,16 @@ class DuckDBStore:
         """)
 
     def _features_table_exists(self) -> bool:
-        return self._conn.execute(
+        return self._scalar(
             "SELECT count(*) FROM information_schema.tables "
             "WHERE table_schema = 'main' AND table_name = 'features'"
-        ).fetchone()[0] > 0
+        ) > 0
 
     def feature_count(self) -> int:
         """Return the number of rows in the features table, or 0 if it doesn't exist."""
         if not self._features_table_exists():
             return 0
-        return self._conn.execute("SELECT count(*) FROM features").fetchone()[0]
+        return self._scalar("SELECT count(*) FROM features")
 
     def close(self) -> None:
         """Close the DuckDB connection."""
@@ -141,10 +148,10 @@ class DuckDBStore:
                 FROM read_parquet('{parquet_path}')
             """)
 
-        count = self._conn.execute(
+        count = self._scalar(
             "SELECT count(*) FROM features WHERE _source_file = ?",
             [parquet_path.name],
-        ).fetchone()[0]
+        )
 
         self._conn.execute(
             "INSERT INTO ingest_log VALUES (?, ?, ?, ?, current_timestamp)",
@@ -165,29 +172,29 @@ class DuckDBStore:
 
         Returns the number of rows actually inserted (not the total table size).
         """
-        table_exists = self._conn.execute(
+        table_exists = self._scalar(
             "SELECT count(*) FROM information_schema.tables WHERE table_name = ?",
             [table],
-        ).fetchone()[0] > 0
+        ) > 0
 
         if not table_exists:
             self._conn.execute(f"""
                 CREATE TABLE {table} AS
                 SELECT * FROM read_parquet('{parquet_path}')
             """)
-            inserted = self._conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            inserted = self._scalar(f"SELECT count(*) FROM {table}")
         else:
             if replace_season and season is not None:
                 try:
                     self._conn.execute(f"DELETE FROM {table} WHERE season = ?", [season])
                 except duckdb.BinderException:
                     pass
-            before = self._conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            before = self._scalar(f"SELECT count(*) FROM {table}")
             self._conn.execute(f"""
                 INSERT INTO {table}
                 SELECT * FROM read_parquet('{parquet_path}')
             """)
-            after = self._conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            after = self._scalar(f"SELECT count(*) FROM {table}")
             inserted = after - before
 
         self._conn.execute(
@@ -217,12 +224,6 @@ class DuckDBStore:
 
         total = 0
         for idx, f in enumerate(parquet_files):
-            stem = f.stem
-            if stem.startswith("features_spring_"):
-                season = int(stem.split("_")[2])
-            else:
-                season = int(stem.split("_")[1])
-
             if idx == 0:
                 self._conn.execute(f"""
                     CREATE TABLE features AS
@@ -328,7 +329,7 @@ class DuckDBStore:
         for (tbl,) in tables:
             if tbl == "ingest_log":
                 continue
-            count = self._conn.execute(f"SELECT count(*) FROM {tbl}").fetchone()[0]
+            count = self._scalar(f"SELECT count(*) FROM {tbl}")
             stats[tbl] = {"rows": count}
             if tbl == "features":
                 seasons = self._conn.execute(
@@ -340,11 +341,11 @@ class DuckDBStore:
     def export_parquet(self, table: str, output_path: Path) -> None:
         """Export a DuckDB table back to Parquet for interoperability."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        has_source_file = self._conn.execute(
+        has_source_file = self._scalar(
             "SELECT count(*) FROM information_schema.columns "
             "WHERE table_schema = 'main' AND table_name = ? AND column_name = '_source_file'",
             [table],
-        ).fetchone()[0] > 0
+        ) > 0
         exclude = " EXCLUDE (_source_file)" if has_source_file else ""
         self._conn.execute(f"""
             COPY (SELECT *{exclude} FROM {table})
