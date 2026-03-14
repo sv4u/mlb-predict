@@ -58,8 +58,8 @@ services:
           memory: ${MEM_LIMIT:-2560m}
           cpus: "${CPUS:-2}"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:30087/api/health"]
+      test: ["CMD-SHELL", "curl -s http://localhost:30087/api/health | grep -q version"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 600s
+      start_period: 60s

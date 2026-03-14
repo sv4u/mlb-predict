@@ -3,15 +3,17 @@
 # entrypoint.sh — container startup script
 #
 # On every container start:
-#   1. If no trained model artifacts exist in /app/data/models, run the full
-#      bootstrap pipeline (ingest all historical data + train every model).
-#      This can take several hours on a cold first run.
-#   2. Start supervisord, which launches:
+#   1. Create required runtime directories on the mounted volume.
+#   2. Start supervisord immediately, which launches:
 #        - mlb-predict-server  (uvicorn FastAPI dashboard, port 30087)
 #        - cron            (supercronic executing docker/crontab)
 #
-# Skip the bootstrap by pre-populating ./data on the host before the first
-# `docker compose up`.  Delete ./data/models/ to force a full re-bootstrap.
+# If no trained model artifacts exist, the FastAPI app auto-bootstraps in the
+# background (ingest + train) while serving a real-time progress UI at "/".
+# Visit http://localhost:PORT/ to monitor bootstrap progress.
+#
+# Skip the auto-bootstrap by pre-populating ./data on the host before the
+# first `docker compose up`.  Delete ./data/models/ to force a re-bootstrap.
 # =============================================================================
 
 set -euo pipefail
@@ -24,18 +26,7 @@ export HOME="${HOME:-/root}"
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/matplotlib}"
 mkdir -p "$HOME" "$MPLCONFIGDIR"
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [entrypoint] $*"; }
-die() { log "ERROR: $*"; exit 1; }
-
-run_step() {
-    local desc="$1"; shift
-    log "→ $desc"
-    "$@" || die "'$desc' failed"
-    log "  ✓ $desc"
-}
 
 # ---------------------------------------------------------------------------
 # Ensure runtime directories exist on the mounted volume
@@ -59,59 +50,14 @@ mkdir -p \
     logs
 
 # ---------------------------------------------------------------------------
-# Bootstrap check
-#
-# We look for any stacked production artifact.  If one exists the volume was
-# either pre-populated or a previous run succeeded, so we skip the expensive
-# initial pipeline.
+# Status check (informational only — no blocking bootstrap)
 # ---------------------------------------------------------------------------
 if ls data/models/stacked_v*_train*/model.joblib 2>/dev/null | grep -q .; then
-    log "Existing model artifacts found — skipping bootstrap."
-    log "  To force a full re-bootstrap: delete ./data/models/ and restart."
+    log "Existing model artifacts found — app will be ready immediately."
 else
-    log "========================================================"
-    log "  FIRST-RUN BOOTSTRAP"
-    log "  No trained model found in data/models/."
-    log "  Running full ingestion and training pipeline."
-    log "  This can take SEVERAL HOURS on a cold start."
-    log "  Progress is logged here and to logs/bootstrap.log"
-    log "========================================================"
-
-    {
-        run_step "Ingest all historical data (2000–$(date +%Y))" \
-            python scripts/ingest_all.py
-
-        YEAR=$(date +%Y)
-
-        run_step "Build pitcher stats" \
-            python scripts/ingest_pitcher_stats.py --seasons $(seq -s ' ' 2000 "$YEAR")
-
-        run_step "Build FanGraphs team metrics" \
-            python scripts/ingest_fangraphs.py
-
-        run_step "Ingest player data (biographical, gamelogs, Statcast)" \
-            python scripts/ingest_player_data.py --seasons $(seq -s ' ' 2000 "$YEAR")
-
-        run_step "Build historical feature matrices (incl. Statcast, Vegas, weather)" \
-            python scripts/build_features.py
-
-        run_step "Build spring training features (all seasons)" \
-            python scripts/build_spring_features.py
-
-        if [ "$YEAR" = "2026" ] && [ -f scripts/build_features_2026.py ]; then
-            run_step "Build 2026 pre-season features" \
-                python scripts/build_features_2026.py
-        fi
-
-        run_step "Populate DuckDB store from feature Parquet files" \
-            python -c "from mlb_predict.storage.duckdb_store import get_store; s = get_store(); s.ingest_all_features(); print(f'DuckDB: {s.table_stats()}')"
-
-        run_step "Train all models (logistic, lightgbm, xgboost, catboost, mlp, stacked)" \
-            python scripts/train_model.py --models logistic lightgbm xgboost catboost mlp stacked
-
-        log "Bootstrap complete."
-
-    } 2>&1 | tee logs/bootstrap.log
+    log "No trained models found in data/models/."
+    log "The web server will start now and auto-bootstrap in the background."
+    log "Visit http://localhost:${PORT}/ for real-time progress."
 fi
 
 # ---------------------------------------------------------------------------
