@@ -1,0 +1,17 @@
+# .agent/config.yaml — mlb-predict agent infrastructure configuration
+
+runners:
+  .py: python.sh
+  .sh: shell.sh
+  .bash: shell.sh
+
+defaults:
+  shell: /bin/bash
+  python: uv run python
+
+project:
+  name: mlb-predict
+  root: ..
+  scripts_dir: scripts
+  data_dir: data
+  src_dir: src/mlb_predict
