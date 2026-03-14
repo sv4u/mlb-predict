@@ -2,7 +2,7 @@
 
 ## MLB Prediction System
 
-### Full Engineering Specification (v3)
+### Full Engineering Specification (v4)
 
 ------------------------------------------------------------------------
 
@@ -14,12 +14,12 @@ and spring training).
 
 The system is designed to:
 
--   Ingest authoritative historical data
--   Maintain deterministic provenance
--   Support lineup-aware and pitcher-aware modeling
--   Persist prediction history immutably
--   Track model drift across time
--   Enable long-term calibration and research analysis
+- Ingest authoritative historical data
+- Maintain deterministic provenance
+- Support lineup-aware and pitcher-aware modeling
+- Persist prediction history immutably
+- Track model drift across time
+- Enable long-term calibration and research analysis
 
 This document defines mandatory architectural, operational, and
 governance rules for all agents contributing to this repository.
@@ -30,16 +30,16 @@ governance rules for all agents contributing to this repository.
 
 All agents must preserve the following invariants:
 
-1.  Determinism — identical inputs produce identical outputs.
-2.  Provenance — every derived artifact must be traceable.
-3.  Immutability — historical prediction snapshots are never mutated.
-4.  Observability — all stages emit structured artifacts.
-5.  Rate Safety — external APIs must be called through bounded,
+1. Determinism — identical inputs produce identical outputs.
+2. Provenance — every derived artifact must be traceable.
+3. Immutability — historical prediction snapshots are never mutated.
+4. Observability — all stages emit structured artifacts.
+5. Rate Safety — external APIs must be called through bounded,
     throttled clients.
-6.  Multi-season support — scripts must accept multiple seasons per run.
-7.  Fail-fast correctness — ambiguous states must raise errors.
-8.  Coverage enforcement — minimum 99.0% crosswalk coverage.
-9.  Storage redundancy — Parquet + CSV where appropriate.
+6. Multi-season support — scripts must accept multiple seasons per run.
+7. Fail-fast correctness — ambiguous states must raise errors.
+8. Coverage enforcement — minimum 99.0% crosswalk coverage.
+9. Storage redundancy — Parquet + CSV where appropriate.
 10. Forward extensibility — no architectural dead-ends.
 
 ------------------------------------------------------------------------
@@ -52,13 +52,13 @@ Location: src/mlb_predict/mlbapi/
 
 Requirements:
 
--   Async aiohttp client
--   TokenBucket(rate=5.0, burst=10.0)
--   Bounded concurrency
--   Retry with exponential backoff
--   429 handling
--   Raw JSON cache
--   Metadata JSONL logging
+- Async aiohttp client
+- TokenBucket(rate=5.0, burst=10.0)
+- Bounded concurrency
+- Retry with exponential backoff
+- 429 handling
+- Raw JSON cache
+- Metadata JSONL logging
 
 Direct API calls outside wrapper are forbidden.
 
@@ -66,12 +66,12 @@ Direct API calls outside wrapper are forbidden.
 
 Each request must log:
 
--   ts_unix
--   url
--   params
--   cache_key
--   endpoint
--   status
+- ts_unix
+- url
+- params
+- cache_key
+- endpoint
+- status
 
 ------------------------------------------------------------------------
 
@@ -79,15 +79,15 @@ Each request must log:
 
 Sources:
 
--   Chadwick GitHub mirror (primary)
--   Retrosheet.org ZIP (fallback)
+- Chadwick GitHub mirror (primary)
+- Retrosheet.org ZIP (fallback)
 
 On fallback:
 
--   source_used
--   url_used
--   fallback_reason
--   raw_sha256
+- source_used
+- url_used
+- fallback_reason
+- raw_sha256
 
 Raw TXT must always be preserved.
 
@@ -103,19 +103,19 @@ games\_<season>.parquet
 
 Columns:
 
--   game_pk (int)
--   season (int)
--   game_date_utc (ISO string)
--   game_date_local (ISO string)
--   home_mlb_id (int)
--   away_mlb_id (int)
--   home_abbrev (str)
--   away_abbrev (str)
--   venue_id (int)
--   local_timezone (str)
--   double_header (str)
--   game_number (int)
--   status (str)
+- game_pk (int)
+- season (int)
+- game_date_utc (ISO string)
+- game_date_local (ISO string)
+- home_mlb_id (int)
+- away_mlb_id (int)
+- home_abbrev (str)
+- away_abbrev (str)
+- venue_id (int)
+- local_timezone (str)
+- double_header (str)
+- game_number (int)
+- status (str)
 - game_type (str: R=regular, S=spring training)
 - home_score (int, nullable: final home score for completed games)
 - away_score (int, nullable: final away score for completed games)
@@ -128,10 +128,10 @@ Includes:
 
 - row_count
 - game_types
--   parquet_sha256
--   csv_sha256
--   raw_payloads_sha256
--   mlbapi_config
+- parquet_sha256
+- csv_sha256
+- raw_payloads_sha256
+- mlbapi_config
 
 ------------------------------------------------------------------------
 
@@ -143,14 +143,14 @@ Columns derived from official GL format.
 
 Mandatory normalized fields:
 
--   date (date)
--   game_num (int)
--   visiting_team (str)
--   home_team (str)
--   visiting_score (int)
--   home_score (int)
--   visiting_starting_pitcher_id
--   home_starting_pitcher_id
+- date (date)
+- game_num (int)
+- visiting_team (str)
+- home_team (str)
+- visiting_score (int)
+- home_score (int)
+- visiting_starting_pitcher_id
+- home_starting_pitcher_id
 
 Checksum file required.
 
@@ -162,16 +162,16 @@ game_id_map\_<season>.parquet
 
 Columns:
 
--   date
--   home_mlb_id
--   away_mlb_id
--   home_retro
--   away_retro
--   dh_game_num
--   status (matched\|missing\|ambiguous)
--   mlb_game_pk
--   match_confidence
--   notes
+- date
+- home_mlb_id
+- away_mlb_id
+- home_retro
+- away_retro
+- dh_game_num
+- status (matched\|missing\|ambiguous)
+- mlb_game_pk
+- match_confidence
+- notes
 
 Coverage report:
 
@@ -193,18 +193,18 @@ run_ts=<ISO>_<model_type>.parquet
 
 Mandatory columns:
 
--   game_pk
--   home_team
--   away_team
--   predicted_home_win_prob
--   run_ts_utc
--   model_version
--   schedule_hash
--   feature_hash
--   lineup_param_hash
--   starter_param_hash
--   git_commit
--   tag (nullable)
+- game_pk
+- home_team
+- away_team
+- predicted_home_win_prob
+- run_ts_utc
+- model_version
+- schedule_hash
+- feature_hash
+- lineup_param_hash
+- starter_param_hash
+- git_commit
+- tag (nullable)
 
 Snapshots are immutable.
 
@@ -214,26 +214,26 @@ Snapshots are immutable.
 
 Each run must compute:
 
-1.  Incremental diff (vs previous snapshot)
-2.  Baseline diff (vs first snapshot of season)
+1. Incremental diff (vs previous snapshot)
+2. Baseline diff (vs first snapshot of season)
 
 Diff schema:
 
--   game_pk
--   p_old
--   p_new
--   delta
--   abs_delta
--   direction
+- game_pk
+- p_old
+- p_new
+- delta
+- abs_delta
+- direction
 
 Run metrics schema:
 
--   mean_abs_delta
--   p95_abs_delta
--   max_abs_delta
--   pct_gt_0p01
--   pct_gt_0p02
--   pct_gt_0p05
+- mean_abs_delta
+- p95_abs_delta
+- max_abs_delta
+- pct_gt_0p01
+- pct_gt_0p02
+- pct_gt_0p05
 
 Logs:
 
@@ -317,7 +317,7 @@ Agents must NOT:
 
 Implemented modules:
 
-1. Feature engineering pipeline (119 features, multi-window rolling, EWMA, Elo, home/away splits, FanGraphs, Statcast, bullpen, weather, Vegas, is_spring)
+1. Feature engineering pipeline (136 features, multi-window rolling, EWMA, Elo, home/away splits, FanGraphs, Statcast, bullpen, weather, Vegas, is_spring)
 2. Pitcher modeling (season-level ERA, K/9, BB/9, WHIP via MLB Stats API)
 3. Calibration engine (isotonic calibration for tree models, Platt calibration for linear/neural models)
 4. Explanation interface (SHAP for tree models; coefficient ranking for logistic)
@@ -347,13 +347,13 @@ This repository is designed as a durable sabermetric research system.
 
 Primary goals:
 
--   Auditability
--   Longitudinal drift study
--   Model explainability
--   Stable evolution over many seasons
+- Auditability
+- Longitudinal drift study
+- Model explainability
+- Stable evolution over many seasons
 
 Agents must preserve system integrity across time.
 
 ------------------------------------------------------------------------
 
-END OF AGENTS.md (v3)
+END OF AGENTS.md (v4)

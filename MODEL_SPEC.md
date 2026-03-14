@@ -13,7 +13,7 @@ For each scheduled MLB regular season and spring training game `g`, estimate:
 
 - `P(HomeWin | x_g)`
 
-where `x_g ∈ ℝ^119` contains team- and player-level features constructed exclusively
+where `x_g ∈ ℝ^136` contains team- and player-level features constructed exclusively
 from data available before first pitch.
 
 Outputs are probabilities in `[0, 1]` evaluated by Brier score, calibration error,
@@ -21,13 +21,13 @@ and accuracy. All reported metrics are **fully out-of-sample** (expanding-window
 
 ---
 
-# 2. Feature Set (119 features)
+# 2. Feature Set (136 features)
 
 Features must satisfy:
 
 - derived only from data available at scoring time (no leakage)
 - deterministic computation
-- stable schema versioning (see `data/models/cv_summary_v3.json`)
+- stable schema versioning (see `data/models/cv_summary_v4.json`)
 
 ## 2.1 Team strength (Elo)
 
@@ -50,10 +50,10 @@ Applied separately to home and away teams; differentials computed for each windo
 
 | Feature | Description |
 | --- | --- |
-| `home_win_ewm`, `away_win_ewm` | Exponentially weighted win percentage |
-| `home_rd_ewm`, `away_rd_ewm` | Exponentially weighted run differential |
+| `home_win_pct_ewm`, `away_win_pct_ewm` | Exponentially weighted win percentage |
+| `home_run_diff_ewm`, `away_run_diff_ewm` | Exponentially weighted run differential |
 | `home_pythag_ewm`, `away_pythag_ewm` | Exponentially weighted Pythagorean expectation |
-| `pythag_ewm_diff` | `home_pythag_ewm − away_pythag_ewm` |
+| `pythag_diff_ewm` | `home_pythag_ewm − away_pythag_ewm` |
 
 ## 2.4 Home / away performance splits
 
@@ -71,7 +71,7 @@ Applied separately to home and away teams; differentials computed for each windo
 | Feature | Description |
 | --- | --- |
 | `home_streak`, `away_streak` | Current win (+) / loss (−) streak |
-| `home_rest`, `away_rest` | Calendar days since last game (capped at 10) |
+| `home_rest_days`, `away_rest_days` | Calendar days since last game (capped at 10) |
 | `season_progress` | `(game_index / total_games)` — 0.0 = opener, 1.0 = final day |
 
 ## 2.6 Starting pitcher quality (prior season, MLB Stats API)
@@ -83,30 +83,124 @@ Applied separately to home and away teams; differentials computed for each windo
 | `home_sp_bb9`, `away_sp_bb9` | Walks per 9 innings |
 | `sp_era_diff` | `away_sp_era − home_sp_era` (positive = home advantage) |
 
-## 2.7 FanGraphs advanced team metrics (prior season, via `pybaseball`)
+## 2.7 Starting Pitcher WHIP
 
 | Feature | Description |
 | --- | --- |
-| `home_woba`, `away_woba` | Weighted on-base average |
-| `home_barrel_pct`, `away_barrel_pct` | Barrel % |
-| `home_hard_pct`, `away_hard_pct` | Hard Hit % |
-| `home_fip`, `away_fip` | Fielding Independent Pitching |
-| `home_xfip`, `away_xfip` | Expected FIP |
-| `home_k_pct`, `away_k_pct` | Team strikeout % |
-| `woba_diff` | `home_woba − away_woba` |
-| `fip_diff` | `away_fip − home_fip` (positive = home advantage) |
+| `home_sp_whip`, `away_sp_whip` | Walks + hits per inning pitched (prior season) |
 
-## 2.8 Park
+## 2.8 FanGraphs Advanced Team Metrics (24 features)
+
+Prior-season team-level advanced metrics from FanGraphs via `pybaseball`.
+
+**Batting (6 stats × 2 teams = 12 features):**
 
 | Feature | Description |
 | --- | --- |
-| `park_factor` | Median runs-per-game at venue vs. league average (from historical gamelogs) |
+| `home_bat_woba`, `away_bat_woba` | Weighted on-base average |
+| `home_bat_barrel_pct`, `away_bat_barrel_pct` | Barrel % |
+| `home_bat_hard_pct`, `away_bat_hard_pct` | Hard hit % |
+| `home_bat_iso`, `away_bat_iso` | Isolated power |
+| `home_bat_babip`, `away_bat_babip` | BABIP |
+| `home_bat_xwoba`, `away_bat_xwoba` | Expected weighted on-base average |
 
-## 2.9 Game type
+**Pitching (6 stats × 2 teams = 12 features):**
 
 | Feature | Description |
 | --- | --- |
-| `is_spring` | Binary indicator: 1.0 for spring training, 0.0 for regular season |
+| `home_pit_fip`, `away_pit_fip` | Fielding Independent Pitching |
+| `home_pit_xfip`, `away_pit_xfip` | Expected FIP |
+| `home_pit_k_pct`, `away_pit_k_pct` | Team strikeout % |
+| `home_pit_bb_pct`, `away_pit_bb_pct` | Team walk % |
+| `home_pit_hr_fb`, `away_pit_hr_fb` | HR/FB ratio |
+| `home_pit_whip`, `away_pit_whip` | WHIP (team-level FanGraphs) |
+
+## 2.9 Statcast Individual Player Stats (6 features)
+
+| Feature | Description |
+| --- | --- |
+| `home_lineup_xwoba`, `away_lineup_xwoba` | Lineup-weighted xwOBA (prior-season Statcast) |
+| `home_lineup_barrel_pct`, `away_lineup_barrel_pct` | Lineup-weighted barrel% (prior-season) |
+| `home_sp_est_woba`, `away_sp_est_woba` | Starting pitcher estimated xwOBA allowed |
+
+## 2.10 Bullpen (8 features)
+
+| Feature | Description |
+| --- | --- |
+| `home_bullpen_usage_15`, `home_bullpen_usage_30` | Bullpen IP per game (home, 15/30 window) |
+| `away_bullpen_usage_15`, `away_bullpen_usage_30` | Bullpen IP per game (away, 15/30 window) |
+| `home_bullpen_era_proxy_15`, `home_bullpen_era_proxy_30` | Bullpen ERA proxy (home, 15/30 window) |
+| `away_bullpen_era_proxy_15`, `away_bullpen_era_proxy_30` | Bullpen ERA proxy (away, 15/30 window) |
+
+## 2.11 Lineup Continuity (2 features)
+
+| Feature | Description |
+| --- | --- |
+| `home_lineup_continuity` | Fraction of prior game's lineup retained (home) |
+| `away_lineup_continuity` | Fraction of prior game's lineup retained (away) |
+
+## 2.12 Run Distribution (4 features)
+
+| Feature | Description |
+| --- | --- |
+| `home_run_std_30`, `away_run_std_30` | Scoring variance (30-game window) |
+| `home_one_run_win_pct_30`, `away_one_run_win_pct_30` | Close-game win% (30-game window) |
+
+## 2.13 Contextual Features (3 features)
+
+| Feature | Description |
+| --- | --- |
+| `day_night` | 1 = day game, 0 = night game |
+| `interleague` | 1 = interleague matchup |
+| `day_of_week` | 0 (Monday) – 6 (Sunday), normalized |
+
+## 2.14 Vegas Implied Probability (2 features)
+
+| Feature | Description |
+| --- | --- |
+| `vegas_implied_home_win` | Implied home win probability from opening moneyline |
+| `vegas_line_movement` | Change in implied probability (opening → closing) |
+
+## 2.15 Weather (3 features)
+
+| Feature | Description |
+| --- | --- |
+| `game_temp_f` | Game-time temperature (°F) |
+| `game_wind_mph` | Wind speed (mph) |
+| `game_humidity` | Relative humidity (%) |
+
+## 2.16 Differential Features (9 team + 3 player = 12 features)
+
+| Feature | Formula |
+| --- | --- |
+| `pythag_diff_30` | `home_pythag_30 − away_pythag_30` |
+| `pythag_diff_ewm` | `home_pythag_ewm − away_pythag_ewm` |
+| `home_away_split_diff` | `home_win_pct_home_only − away_win_pct_away_only` |
+| `sp_era_diff` | `away_sp_era − home_sp_era` |
+| `woba_diff` | `home_bat_woba − away_bat_woba` |
+| `fip_diff` | `away_pit_fip − home_pit_fip` |
+| `xwoba_diff` | `home_bat_xwoba − away_bat_xwoba` |
+| `whip_diff` | `away_pit_whip − home_pit_whip` |
+| `iso_diff` | `home_bat_iso − away_bat_iso` |
+| `lineup_strength_diff` | `home_lineup_strength − away_lineup_strength` (Stage 1) |
+| `sp_quality_diff` | `home_sp_quality − away_sp_quality` (Stage 1) |
+| `matchup_advantage_diff` | `home_lineup_vs_sp − away_lineup_vs_sp` (Stage 1) |
+
+## 2.17 Stage 1 Player Model Features (14 per-team + 3 differentials = 17 features)
+
+Produced by the Stage 1 PyTorch player embedding model.  Per-player EWMA rolling stats, learned player ID embeddings, and biographical data are aggregated across the batting lineup using batting-order position weights.
+
+| Feature | Description |
+| --- | --- |
+| `home_lineup_strength`, `away_lineup_strength` | Neural lineup quality score (0–1 scale) |
+| `home_top3_quality`, `away_top3_quality` | Average quality of batters 1–3 |
+| `home_bottom3_quality`, `away_bottom3_quality` | Average quality of batters 7–9 |
+| `home_lineup_variance`, `away_lineup_variance` | Std dev of individual player quality |
+| `home_platoon_advantage`, `away_platoon_advantage` | Learned platoon interaction vs opposing SP |
+| `home_sp_quality`, `away_sp_quality` | Neural starting pitcher quality score |
+| `home_lineup_vs_sp`, `away_lineup_vs_sp` | Matchup interaction: lineup vs opposing SP |
+
+Differentials (`lineup_strength_diff`, `sp_quality_diff`, `matchup_advantage_diff`) are listed in §2.16.
 
 ---
 
@@ -129,7 +223,7 @@ All six models share the same protocol:
   Platt calibration (sigmoid meta-layer `σ(a·logit + b)`) for linear and neural models
   (logistic, MLP). Fitted on a held-out calibration split. Ensures that predicted 65%
   games actually win ~65% of the time.
-- **Model artifact versioning**: `v3` is the current production version.
+- **Model artifact versioning**: `v4` is the current production version.
 
 ## 3.2 Logistic Regression
 
@@ -209,18 +303,11 @@ outputs of the five base models and blends them optimally.
 | **Accuracy** | % of games where the model's favourite won |
 | **Calibration error** | Mean absolute deviation between predicted probability and observed win rate |
 
-## 4.2 Current out-of-sample results (v3, expanding-window CV, 2001–2025)
+## 4.2 Current out-of-sample results
 
-| Model               | Mean Brier | Mean Accuracy | Cal. Error |
-| ------------------- | ---------- | ------------- | ---------- |
-| Logistic regression | 0.2443     | 56.2%         | 0.030      |
-| LightGBM (Optuna)   | 0.2448     | 55.9%         | 0.029      |
-| XGBoost (Optuna)    | **0.2442** | 56.4%         | 0.029      |
-| CatBoost (Optuna)   | 0.2470     | —             | —          |
-| MLP (Neural Network)| 0.2464     | —             | —          |
-| Stacked ensemble    | **0.2441** | 56.3%         | 0.029      |
+v4 results will be available after the next training run with Stage 1 player features.
 
-Full season-by-season CV results: `data/models/cv_summary_v3.json`
+Full season-by-season CV results: `data/models/cv_summary_v4.json`
 
 ## 4.3 Splits
 
@@ -234,7 +321,7 @@ Full season-by-season CV results: `data/models/cv_summary_v3.json`
 
 ## 5.1 Semantic versioning
 
-- **major** (`v1 → v2 → v3`): feature schema changes
+- **major** (`v1 → v2 → v3 → v4`): feature schema changes
 - **minor**: new features or calibration approach within the same schema
 - **patch**: bug fixes without schema changes
 
@@ -244,7 +331,7 @@ Each prediction snapshot Parquet includes:
 
 | Hash field | Source |
 | --- | --- |
-| `model_version` | e.g. `xgboost_v3_train2025` |
+| `model_version` | e.g. `xgboost_v4_train2025` |
 | `schedule_hash` | SHA256 of the schedule Parquet |
 | `feature_hash` | SHA256 of the feature Parquet |
 | `git_commit` | Current HEAD commit SHA |
@@ -281,6 +368,9 @@ Agents MUST NOT:
 | CatBoost + Optuna HPO | ✅ Implemented (v3) |
 | MLP neural network | ✅ Implemented (v3) |
 | Spring training data integration | ✅ Implemented |
+| Stage 1 player embedding model (v4) | ✅ Implemented |
+| Per-pitcher game logs (MLB Stats API, v4) | ✅ Implemented |
+| Feature schema 119 → 136 (v4) | ✅ Implemented |
 | Pre-training data validation | ✅ Implemented |
 | Drift monitoring | ✅ Implemented |
 | SHAP attributions | ✅ Implemented |

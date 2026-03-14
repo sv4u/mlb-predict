@@ -1,7 +1,6 @@
 """Tool functions and flat JSON schemas for MCP and other consumers.
 
-Twelve tools: 10 that wrap existing project code, plus find_ev_bets and
-get_live_odds as stubs until odds/EV modules exist. Flat schemas (no nested
+Twelve tools that wrap existing project code.  Flat schemas (no nested
 objects, no $defs) for compatibility with tool-calling clients.
 """
 
@@ -295,14 +294,41 @@ def _tool_compare_models() -> str:
 
 
 def _tool_get_team_stats(season: int | None) -> str:
+    """Return per-team feature averages (Elo, win%, Pythagorean, SP ERA, wOBA, FIP) for a season."""
     if not is_ready():
         return json.dumps({"error": "Data not loaded yet."})
-    return json.dumps(
-        {
-            "message": "Full team batting/pitching stats are available on the dashboard at /api/team-stats. Pass season (e.g. 2026) as query. This tool does not call the MLB API.",
-            "season": season or 2026,
-        }
+    season = season or 2026
+    df = get_features()
+    sdf = df[df["season"] == int(season)]
+    if sdf.empty:
+        return json.dumps({"season": season, "teams": [], "message": "No data for this season."})
+    stat_cols: dict[str, tuple[str, str]] = {
+        "elo": ("home_elo", "away_elo"),
+        "win_pct_30": ("home_win_pct_30", "away_win_pct_30"),
+        "pythag_30": ("home_pythag_30", "away_pythag_30"),
+        "sp_era": ("home_sp_era", "away_sp_era"),
+        "bat_woba": ("home_bat_woba", "away_bat_woba"),
+        "pit_fip": ("home_pit_fip", "away_pit_fip"),
+    }
+    teams = sorted(
+        set(sdf["home_retro"].dropna().unique()) | set(sdf["away_retro"].dropna().unique())
     )
+    rows: list[dict] = []
+    for code in teams:
+        entry: dict = {"team": code, "team_name": TEAM_NAMES.get(code, "")}
+        for stat_name, (home_col, away_col) in stat_cols.items():
+            if home_col not in sdf.columns or away_col not in sdf.columns:
+                continue
+            vals = pd.concat(
+                [
+                    sdf.loc[sdf["home_retro"] == code, home_col],
+                    sdf.loc[sdf["away_retro"] == code, away_col],
+                ]
+            ).dropna()
+            entry[stat_name] = round(float(vals.mean()), 4) if len(vals) else None
+        rows.append(entry)
+    rows.sort(key=lambda x: x.get("elo") or 0, reverse=True)
+    return json.dumps({"season": season, "teams": rows})
 
 
 def _tool_get_standings(season: int | None) -> str:
@@ -423,11 +449,35 @@ def _tool_get_season_summary() -> str:
 
 
 def _tool_find_ev_bets() -> str:
-    return json.dumps(
-        {
-            "message": "Odds and EV features are not available yet. They will be added in a future update."
-        }
+    """Find positive-EV moneyline bets by comparing model probabilities with live odds."""
+    if not is_ready():
+        return json.dumps({"error": "Data not loaded yet."})
+    from mlb_predict.app.odds_cache import compute_ev_opportunities
+    from mlb_predict.external.betting_config import get_betting_config
+    from mlb_predict.external.odds import OddsClient
+
+    client = OddsClient()
+    if not client.is_available():
+        return json.dumps(
+            {
+                "message": "Live odds are not configured. Set ODDS_API_KEY or add the key in Dashboard → Live Odds API Key."
+            }
+        )
+    events = client.get_game_odds_sync()
+    if not events:
+        return json.dumps({"message": "No upcoming games with odds right now.", "opportunities": []})
+    client.events_to_retro(events)
+    cfg = get_betting_config()
+    opps = compute_ev_opportunities(
+        events,
+        get_features(),
+        min_edge=0.0,
+        kelly_fraction=cfg.kelly_pct / 100.0,
+        budget=cfg.budget,
     )
+    if not opps:
+        return json.dumps({"message": "No positive-EV opportunities found.", "opportunities": []})
+    return json.dumps({"opportunities": opps[:20], "count": len(opps)})
 
 
 def _tool_get_live_odds() -> str:
@@ -442,9 +492,9 @@ def _tool_get_live_odds() -> str:
             }
         )
     events = client.get_game_odds_sync()
-    client.events_to_retro(events)
     if not events:
         return json.dumps({"message": "No upcoming games with odds right now.", "events": []})
+    client.events_to_retro(events)
     out = []
     for ev in events[:20]:
         home = ev.get("home_team") or ""

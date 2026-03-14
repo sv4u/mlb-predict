@@ -1,3 +1,10 @@
+"""Async MLB Stats API client with rate limiting, caching, and retry logic.
+
+All external HTTP calls to the MLB Stats API must go through ``MLBAPIClient``.
+Responses are cached to disk keyed by ``sha256(url + sorted_params)`` and every
+request is appended to an append-only ``metadata.jsonl`` audit log.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -33,6 +40,8 @@ class MLBNotFoundError(MLBAPIError):
 
 @dataclass
 class TokenBucket:
+    """Async token-bucket rate limiter for controlling request throughput."""
+
     rate: float
     capacity: float
 
@@ -61,6 +70,8 @@ class TokenBucket:
 
 @dataclass(frozen=True)
 class MLBAPIConfig:
+    """Configuration for the MLB Stats API client (base URL, timeouts, rate limits)."""
+
     base_url: str = "https://statsapi.mlb.com"
     api_prefix: str = "/api/v1"
     timeout_s: float = 20.0
@@ -73,6 +84,8 @@ class MLBAPIConfig:
 
 
 class MLBAPIClient:
+    """Async HTTP client for the MLB Stats API with caching, rate limiting, and retries."""
+
     def __init__(
         self,
         *,

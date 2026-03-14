@@ -2,32 +2,15 @@
 
 Research-grade MLB prediction system for pre-game win probability, standings, and related analysis — regular season and spring training, 2000–2026.
 
-## Model performance (v3 — out-of-sample, expanding-window CV)
-
-| Model               | Mean Brier | Mean Accuracy | Cal. Error | Best season |
-| ------------------- | ---------- | ------------- | ---------- | ----------- |
-| Logistic regression  | 0.2444     | 56.1%         | 0.029      | 2019: 58.4% |
-| LightGBM (Optuna)   | 0.2455     | 55.8%         | 0.034      | 2019: 57.9% |
-| XGBoost (Optuna)     | 0.2449     | 56.0%         | 0.032      | 2019: 58.5% |
-| CatBoost (Optuna)    | 0.2470     | 54.9%         | 0.031      | 2010: 57.1% |
-| MLP (Neural Network) | 0.2464     | 55.1%         | 0.031      | 2019: 59.2% |
-| Avg. ensemble        | 0.2445     | 56.1%         | 0.029      | 2019: 58.5% |
-| Stacked ensemble     | **0.2446** | **56.1%**     | **0.029**  | 2019: 58.5% |
-
-All metrics are fully out-of-sample: train on seasons < N, evaluate on season N.
-The stacked ensemble (blending all five base models) is the default production model.
-Tree models use **isotonic calibration**; logistic and MLP use **Platt calibration**.
-The training pipeline dynamically selects features available across all seasons.
-
 ---
 
 ## Models
 
-The system trains six models on 119 pre-game features using an **expanding-window protocol** — each season N is evaluated using a model trained exclusively on seasons before N, so all reported metrics are fully out-of-sample. Every model goes through **probability calibration** (isotonic for tree models, Platt sigmoid for linear/neural) and **time-weighted training** (exponential decay rate 0.12 per season, so 2024 weight = 1.0, 2020 weight ≈ 0.61, 2015 weight ≈ 0.30). Features are dynamically selected based on availability across seasons.
+The system trains six models on 136 pre-game features using an **expanding-window protocol** — each season N is evaluated using a model trained exclusively on seasons before N, so all reported metrics are fully out-of-sample. Every model goes through **probability calibration** (isotonic for tree models, Platt sigmoid for linear/neural) and **time-weighted training** (exponential decay rate 0.12 per season, so 2024 weight = 1.0, 2020 weight ≈ 0.61, 2015 weight ≈ 0.30). Features are dynamically selected based on availability across seasons.
 
 ### Logistic Regression
 
-A regularised linear model that serves as the interpretable baseline. All 119 features are z-score standardised before fitting. Because the decision boundary is a hyperplane, the model captures additive effects — for example, a larger Elo differential increases home-win probability by a fixed amount regardless of the other features. Its simplicity makes it fast, stable, and easy to audit.
+A regularised linear model that serves as the interpretable baseline. All 136 features are z-score standardised before fitting. Because the decision boundary is a hyperplane, the model captures additive effects — for example, a larger Elo differential increases home-win probability by a fixed amount regardless of the other features. Its simplicity makes it fast, stable, and easy to audit.
 
 - **Regularisation**: L2 (ridge), `C=1.0`
 - **Solver**: L-BFGS with up to 1 000 iterations
@@ -95,7 +78,7 @@ The stacked ensemble never sees raw features. Instead, it takes the **calibrated
 
 ---
 
-## Features (119 total)
+## Features (136 total, v4)
 
 ### Team performance (27 features)
 
@@ -162,6 +145,16 @@ The stacked ensemble never sees raw features. Instead, it takes the **calibrated
 ### Differential features (9 features)
 
 - Pythagorean diff, EWMA Pythagorean diff, home/road split diff, SP ERA diff, wOBA diff, FIP diff, xwOBA diff, WHIP diff, ISO diff
+
+### Stage 1 player model features (17 features)
+
+- **Lineup strength** (home, away) — neural lineup quality score from PyTorch player embedding model
+- **Top-3 / bottom-3 quality** (home, away) — average player quality for batters 1–3 and 7–9
+- **Lineup variance** (home, away) — standard deviation of player quality across the 9-man lineup
+- **Platoon advantage** (home, away) — learned platoon interaction vs. opposing SP handedness
+- **SP quality** (home, away) — neural starting pitcher quality from EWMA rolling stats and learned embeddings
+- **Lineup vs SP** (home, away) — learned interaction between lineup strength and opposing SP quality
+- **Differentials** — lineup strength diff, SP quality diff, matchup advantage diff
 
 ---
 
@@ -344,7 +337,7 @@ The `scripts/update_daily.sh` script refreshes game results, rebuilds features, 
 | 1 | Refresh the current-season MLB schedule (picks up postponements and rescheduled games) |
 | 2 | Refresh the current-season Retrosheet gamelogs (yesterday's results) |
 | 3 | Rebuild the Retrosheet ↔ MLB crosswalk for the current season |
-| 4 | Rebuild the 119-feature matrix for the current season (incl. Statcast, Vegas, weather) |
+| 4 | Rebuild the 136-feature matrix for the current season (incl. Statcast, Vegas, weather) |
 | 5 | Build spring training features for the current season |
 | 6 | Rebuild 2026 pre-season predictions from the updated team state |
 | 7 | Kill the running server and start a fresh instance to load the new data |
@@ -501,7 +494,7 @@ The container runs two cron jobs via `supercronic`:
 
 | Schedule   | Script                      | What it does |
 | ---------- | --------------------------- | ------------ |
-| 01:00 UTC  | `docker/ingest_daily.sh`    | Refresh current-season schedule and gamelogs (incl. spring training), rebuild 119-feature matrix and spring features, restart server |
+| 01:00 UTC  | `docker/ingest_daily.sh`    | Refresh current-season schedule and gamelogs (incl. spring training), rebuild 136-feature matrix and spring features, restart server |
 | 20:00 UTC  | `docker/retrain_daily.sh`   | Retrain all 6 models on fresh data, restart server |
 
 Logs are written to `./logs/ingest_daily.log` and `./logs/retrain_daily.log` on the host.
@@ -603,15 +596,15 @@ MLB Stats API     Retrosheet gamelogs   FanGraphs      Statcast (pybaseball)
                     │
                     ▼
               features/
-     features_YYYY.parquet      ←── 119 features per game (build_features.py)
+     features_YYYY.parquet      ←── 136 features per game (build_features.py)
      features_spring_YYYY.parquet ←── spring training (build_spring_features.py)
      features_2026.parquet      ←── pre-season 2026 (from build_features_2026.py)
                     │
                     ▼
                models/
-  logistic_v3_train2026/    lightgbm_v3_train2026/
-  xgboost_v3_train2026/     catboost_v3_train2026/
-  stacked_v3_train2026/     cv_summary_v3.json
+  logistic_v4_train2026/    lightgbm_v4_train2026/
+  xgboost_v4_train2026/     catboost_v4_train2026/
+  stacked_v4_train2026/     cv_summary_v4.json
 ```
 
 ---
@@ -633,7 +626,7 @@ MLB Stats API     Retrosheet gamelogs   FanGraphs      Statcast (pybaseball)
 | `data/processed/statcast_player/`  | Statcast individual batter and pitcher stats (via pybaseball) |
 | `data/processed/vegas/`            | `vegas_YYYY.parquet` (implied probabilities from money lines) |
 | `data/processed/weather/`          | `by_park_date.parquet` (historical temp, wind, humidity per game) |
-| `data/processed/features/`         | `features_YYYY.parquet` (119-feature matrix per season), `features_spring_YYYY.parquet` (spring training) |
+| `data/processed/features/`         | `features_YYYY.parquet` (136-feature matrix per season), `features_spring_YYYY.parquet` (spring training) |
 | `data/models/`                     | Trained model artifacts + HPO results + CV summaries       |
 | `data/processed/predictions/`      | Immutable prediction snapshots (Parquet, by season)        |
 | `data/processed/drift/`            | Drift monitoring logs (`run_metrics_YYYY.parquet`, global) |
@@ -660,7 +653,7 @@ if "is_spring" not in df.columns:
 from mlb_predict.model.artifacts import latest_artifact, load_model
 from mlb_predict.model.train import _predict_proba
 
-model, meta = load_model(latest_artifact("logistic", version="v3"))
+model, meta = load_model(latest_artifact("logistic", version="v4"))
 df["prob"] = _predict_proba(model, df[meta.feature_cols].fillna(0.5))
 
 # 2024 games with high home-team probability
@@ -691,6 +684,9 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 | `http://localhost:30087/season/2026` | 2026 schedule, pre-season predictions, standings summary, and Elo power rankings |
 | `http://localhost:30087/standings` | Predicted vs actual divisional standings, league leaders, team batting and pitching stats |
 | `http://localhost:30087/game/{game_pk}` | Individual game detail with SHAP feature attribution and embedded EV calculator |
+| `http://localhost:30087/leaders` | League leaders by stat category (AL and NL) |
+| `http://localhost:30087/players` | Full player statistics browser with filtering |
+| `http://localhost:30087/odds` | Live moneyline odds and EV opportunities (requires Odds API key) |
 | `http://localhost:30087/tools/ev-calculator` | Expected value calculator for sports bets (American, decimal, fractional odds; edge, ROI, Kelly criterion) |
 | `http://localhost:30087/wiki` | Technical wiki: models, data sources, features, training pipeline |
 | `http://localhost:30087/dashboard` | Admin dashboard: update season, full reingest, retrain models, system status |
@@ -755,7 +751,7 @@ mlb-predict/
 │   │   ├── park_factors.py
 │   │   ├── bullpen.py       # Bullpen usage and ERA proxy features
 │   │   ├── lineup.py        # Lineup continuity features
-│   │   └── builder.py       # Assembles 119-feature matrix
+│   │   └── builder.py       # Assembles 136-feature matrix (v4)
 │   ├── model/           # Model training and evaluation
 │   │   ├── train.py     # LR + LightGBM + XGBoost + CatBoost + MLP + stacked
 │   │   ├── evaluate.py
@@ -787,7 +783,7 @@ mlb-predict/
 │   ├── ingest_vegas.py                 # Vegas money-line odds → implied probabilities
 │   ├── ingest_weather.py               # Open-Meteo historical weather backfill
 │   ├── ingest_all.py                   # Orchestrate all ingestion steps
-│   ├── build_features.py               # Build 119-feature matrices (historical)
+│   ├── build_features.py               # Build 136-feature matrices (historical)
 │   ├── build_spring_features.py        # Build spring training feature matrices
 │   ├── build_features_2026.py          # Build 2026 pre-season feature matrix
 │   ├── train_model.py                  # Optuna HPO + expanding-window CV + 6 production models
@@ -835,7 +831,18 @@ mlb-predict/
 
 ---
 
-## Changelog (v3.1 — Code Review Fixes)
+## Changelog
+
+### v4 — Two-Stage Player Model
+
+- **Stage 1 player embedding model**: PyTorch neural model with learned player ID embeddings, per-player EWMA rolling stats, and biographical features. Produces 17 game-level player features.
+- **Feature schema bump**: 119 → 136 features (119 team-level + 17 Stage 1 player features).
+- **Per-pitcher game logs**: high-fidelity pitcher stats from MLB Stats API game log endpoint.
+- **Expanded player data pipeline**: FanGraphs player-level stats, expanded Statcast batter/pitcher stats, player biographical data.
+- **MCP tools wired**: `find_ev_bets` and `get_team_stats` tools now return live data instead of placeholder messages.
+- **BettingService gRPC removed**: unused proto and generated stubs cleaned up.
+
+### v3.1 — Code Review Fixes
 
 Fixes from the comprehensive code review (22 new tests added, 228 total passing):
 

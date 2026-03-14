@@ -220,7 +220,6 @@ mlb-predict/
 │   └── RETROSHEET_ATTRIBUTION.md     # Retrosheet attribution notice
 ├── proto/mlb_predict/v1/
 │   ├── admin.proto                   # AdminService
-│   ├── betting.proto                 # BettingService
 │   ├── common.proto                  # Shared messages
 │   ├── games.proto                   # GameService
 │   ├── models.proto                  # ModelService
@@ -1102,20 +1101,11 @@ flowchart LR
 | **Accuracy** | % of games where the model's favourite (p > 0.5) won. |
 | **Calibration error** | Mean absolute deviation between predicted probability bins and observed win rate. |
 
-### 8.7 Out-of-Sample Results (v3 baseline, 2001–2025)
+### 8.7 Out-of-Sample Results
 
-| Model | Mean Brier | Mean Accuracy | Cal. Error |
-|---|---|---|---|
-| Stacked Ensemble | **0.2441** | 56.3% | 0.029 |
-| XGBoost (Optuna) | **0.2442** | 56.4% | 0.029 |
-| Logistic Regression | 0.2443 | 56.2% | 0.030 |
-| LightGBM (Optuna) | 0.2448 | 55.9% | 0.029 |
-| MLP (Neural Network) | 0.2464 | — | — |
-| CatBoost (Optuna) | 0.2470 | — | — |
+v4 results will be available after the next training run with Stage 1 player features.
 
-Full season-by-season CV results: `data/models/cv_summary_v3.json`.
-
-> v4 results (with Stage 1 player features) will be generated after implementation and training. Expected improvement: 0.5–1.5% reduction in mean Brier score from player-level signal, particularly for games with unusual lineup compositions.
+Full season-by-season CV results: `data/models/cv_summary_v4.json`.
 
 ### 8.8 Model Versioning
 
@@ -1406,17 +1396,6 @@ service AdminService {
 
 `RunPipeline` is server-streaming, emitting progress events as the pipeline executes.
 
-### 12.6 BettingService
-
-```protobuf
-service BettingService {
-  rpc GetOdds(GetOddsRequest) returns (GetOddsResponse);
-  rpc GetEVOpportunities(GetEVOpportunitiesRequest) returns (GetEVOpportunitiesResponse);
-  rpc GetFuturesEV(GetFuturesEVRequest) returns (GetFuturesEVResponse);
-  rpc GetGameOdds(GetGameOddsRequest) returns (GetGameOddsResponse);
-}
-```
-
 ---
 
 ## 13. Container and Deployment
@@ -1453,7 +1432,7 @@ Pre-built image config: `docker-compose.image.yml` (pulls from GHCR).
 
 1. Export `MODEL`, `PORT`, `HOME`, and `MPLCONFIGDIR` environment variables; create `$HOME` and `$MPLCONFIGDIR` directories to prevent matplotlib and other libraries from crashing on permission errors.
 2. Create all required runtime directories on the mounted volume (idempotent; safe to re-run).
-3. Glob-check for `data/models/stacked_v3_train*/model.joblib`.
+3. Glob-check for `data/models/stacked_v*_train*/model.joblib`.
 4. If absent (first run), execute full bootstrap (output tee'd to `logs/bootstrap.log`):
    - `scripts/ingest_all.py` → pitcher stats → FanGraphs → features → spring features → (conditionally) 2026 features if `YEAR == 2026` and script exists → train all 6 models.
 5. Launch `supervisord` → starts `mlb-predict-server` (uvicorn) and `cron` (supercronic) side-by-side.

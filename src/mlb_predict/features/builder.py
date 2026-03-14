@@ -1,4 +1,4 @@
-"""Feature matrix builder (v2) for the MLB win-probability model.
+"""Feature matrix builder (v4) for the MLB win-probability model.
 
 Feature set
 -----------
