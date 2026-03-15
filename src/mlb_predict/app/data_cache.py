@@ -211,15 +211,16 @@ def get_active_model_type() -> str:
 
 
 def available_model_types() -> list[str]:
-    """Return the list of model types that have trained artifacts on disk."""
-    from mlb_predict.model.artifacts import latest_artifact
+    """Return the list of model types that have trained artifacts on disk.
+
+    Checks full tier, quick tier, and legacy locations.
+    """
+    from mlb_predict.model.artifacts import latest_artifact_best_tier
 
     types = []
     for mt in ("logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"):
-        if (
-            latest_artifact(mt, model_dir=_MODEL_DIR, version="v4") is not None
-            or latest_artifact(mt, model_dir=_MODEL_DIR, version="v3") is not None
-        ):
+        art, _ = latest_artifact_best_tier(mt, model_dir=_MODEL_DIR)
+        if art is not None:
             types.append(mt)
     return types
 
@@ -230,19 +231,20 @@ def switch_model(model_type: str) -> None:
     Thread-safe: acquires the global lock, loads new model artifacts,
     recomputes probabilities, then releases the lock.
     Clears response and game-detail caches so new model is reflected.
+    Prefers full-tier models over quick-tier over legacy.
     """
     global _features, _model, _meta, _feature_cols, _active_model_type
 
     t0 = time.monotonic()
     logger.info("Switching active model to '%s' …", model_type)
-    from mlb_predict.model.artifacts import latest_artifact, load_model
+    from mlb_predict.model.artifacts import latest_artifact_best_tier, load_model
     from mlb_predict.model.train import _predict_proba
 
-    art = latest_artifact(model_type, model_dir=_MODEL_DIR, version="v4")
-    if art is None:
-        art = latest_artifact(model_type, model_dir=_MODEL_DIR, version="v3")
+    art, tier = latest_artifact_best_tier(model_type, model_dir=_MODEL_DIR)
     if art is None:
         raise RuntimeError(f"No trained artifact found for model type '{model_type}'.")
+    tier_label = tier.value if tier else "legacy"
+    logger.info("Loading %s artifact from %s tier", model_type, tier_label)
 
     with _lock:
         prev_model, prev_meta = _model, _meta
@@ -450,14 +452,14 @@ def startup(model_type: str = "logistic") -> None:
         else:
             _features["is_spring"] = _features["is_spring"].fillna(0.0)
 
-        from mlb_predict.model.artifacts import latest_artifact, load_model
+        from mlb_predict.model.artifacts import latest_artifact_best_tier, load_model
         from mlb_predict.model.train import _predict_proba
 
-        art = latest_artifact(model_type, model_dir=_MODEL_DIR, version="v4")
-        if art is None:
-            art = latest_artifact(model_type, model_dir=_MODEL_DIR, version="v3")
+        art, tier = latest_artifact_best_tier(model_type, model_dir=_MODEL_DIR)
         if art is None:
             raise RuntimeError(f"No production model found for type '{model_type}'.")
+        tier_label = tier.value if tier else "legacy"
+        logger.info("Loading %s model from %s tier: %s", model_type, tier_label, art.name)
         _model, _meta = load_model(art)
         _feature_cols = _meta.feature_cols
 

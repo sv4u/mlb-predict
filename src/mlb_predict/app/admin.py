@@ -191,20 +191,36 @@ def _clean_processed_data(state: PipelineState) -> None:
             state.append_log(f"  Removed file: {item.name}")
 
 
-def _clean_models(state: PipelineState) -> None:
-    """Remove all model artifacts under data/models/."""
-    import shutil
+def _archive_models(state: PipelineState, tier: str | None = None) -> None:
+    """Archive model artifacts to data/models/archive/ for drift analysis.
 
-    if not _MODEL_DIR.exists():
-        state.append_log("  No models directory — nothing to clean.")
-        return
-    for item in sorted(_MODEL_DIR.iterdir()):
-        if item.is_dir():
-            shutil.rmtree(item)
-            state.append_log(f"  Removed model: {item.name}/")
-        elif item.is_file():
-            item.unlink()
-            state.append_log(f"  Removed file: {item.name}")
+    When *tier* is ``"quick"`` or ``"full"``, only archives models in that
+    tier's subdirectory.  When ``None``, archives legacy top-level models.
+    """
+    from mlb_predict.model.artifacts import TrainingTier, archive_models
+
+    if tier is not None:
+        training_tier = TrainingTier(tier)
+        count = archive_models(_MODEL_DIR, tier=training_tier)
+        state.append_log(f"  Archived {count} {tier} model artifact(s) to archive/")
+    else:
+        count = archive_models(_MODEL_DIR, tier=None)
+        state.append_log(f"  Archived {count} legacy model artifact(s) to archive/")
+
+
+def has_processed_data() -> bool:
+    """Return True if processed feature files exist."""
+    features_dir = _PROCESSED_DIR / "features"
+    if not features_dir.exists():
+        return False
+    return any(features_dir.glob("features_*.parquet"))
+
+
+def has_trained_models() -> bool:
+    """Return True if any trained model artifacts exist (any tier)."""
+    from mlb_predict.model.artifacts import has_trained_models as _has
+
+    return _has(_MODEL_DIR)
 
 
 def _python_bin() -> str:
@@ -335,26 +351,30 @@ def _retrain_commands(
     opts: PipelineOptions | None = None,
     *,
     bootstrap: bool = False,
+    training_tier: str = "full",
 ) -> list[tuple[str, str]]:
-    """Retrain all production models from scratch.
+    """Retrain all production models.
 
-    When *bootstrap* is True, skips expanding-window CV and Stage 1 player
-    embeddings to produce usable models in minutes instead of hours.
-    Options from *opts* (skip_cv, skip_stage1) override bootstrap defaults
-    for manual dashboard-triggered retrains.
+    When *bootstrap* is True or *training_tier* is ``"quick"``, skips
+    expanding-window CV and Stage 1 player embeddings to produce usable
+    models in minutes instead of hours.
+    Options from *opts* (skip_cv, skip_stage1) override defaults for
+    manual dashboard-triggered retrains.
     """
     python = _python_bin()
     models = "logistic lightgbm xgboost catboost mlp stacked"
-    flags = ""
-    skip_cv = bootstrap or (opts.skip_cv if opts else False)
-    skip_stage1 = bootstrap or (opts.skip_stage1 if opts else False)
+    effective_tier = "quick" if bootstrap else training_tier
+    flags = f" --tier {effective_tier}"
+    skip_cv = (effective_tier == "quick") or (opts.skip_cv if opts else False)
+    skip_stage1 = (effective_tier == "quick") or (opts.skip_stage1 if opts else False)
     if skip_cv:
         flags += " --skip-cv"
     if skip_stage1:
         flags += " --no-stage1"
+    tier_label = "quick" if effective_tier == "quick" else "full"
     return [
         (
-            "Train all production models",
+            f"Train all production models ({tier_label})",
             f"{python} scripts/train_model.py --models {models}{flags}",
         ),
     ]
@@ -388,12 +408,13 @@ async def run_pipeline(
     opts: PipelineOptions | None = None,
     *,
     bootstrap: bool = False,
+    training_tier: str = "full",
 ) -> None:
     """Execute a pipeline (ingest or retrain) as a background task.
 
     After successful completion, calls ``on_success`` (typically a model reload)
     and writes a timestamp marker.  When *bootstrap* is True, retrain uses
-    ``--skip-cv --no-stage1`` for a fast first-time setup.
+    quick tier.  *training_tier* selects ``"quick"`` or ``"full"`` storage.
     """
     state = get_state(kind)
 
@@ -404,20 +425,24 @@ async def run_pipeline(
 
     state.reset()
 
+    effective_tier = "quick" if bootstrap else training_tier
+
     try:
         if kind == PipelineKind.INGEST:
             state.append_log(">>> Clearing all processed data…")
             _clean_processed_data(state)
         elif kind == PipelineKind.RETRAIN:
-            state.append_log(">>> Clearing all model artifacts…")
-            _clean_models(state)
+            state.append_log(f">>> Archiving {effective_tier} model artifacts…")
+            _archive_models(state, tier=effective_tier)
 
         if kind == PipelineKind.INGEST:
             commands = _ingest_commands(opts)
         elif kind == PipelineKind.UPDATE:
             commands = _update_commands(opts)
         else:
-            commands = _retrain_commands(opts, bootstrap=bootstrap)
+            commands = _retrain_commands(
+                opts, bootstrap=bootstrap, training_tier=training_tier,
+            )
 
         state.init_steps([desc for desc, _ in commands])
 
@@ -507,33 +532,57 @@ def gather_data_status() -> dict[str, Any]:
     }
 
 
+def _scan_model_dir(d: Path, tier: str = "legacy") -> list[dict[str, Any]]:
+    """Scan a single directory for model artifacts, tagging each with its tier."""
+    found: list[dict[str, Any]] = []
+    if not d.exists():
+        return found
+    for item in sorted(d.iterdir()):
+        if not item.is_dir() or not (item / "model.joblib").exists():
+            continue
+        meta_path = item / "metadata.json"
+        meta: dict[str, Any] = {}
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text())
+            except Exception:
+                pass
+        found.append(
+            {
+                "name": item.name,
+                "model_type": meta.get("model_type", item.name.split("_")[0]),
+                "version": meta.get("model_version", meta.get("version", "unknown")),
+                "training_tier": meta.get("training_tier", tier),
+                "training_seasons": meta.get("training_seasons"),
+                "trained_at": meta.get("trained_at"),
+            }
+        )
+    return found
+
+
 def gather_model_status() -> dict[str, Any]:
-    """Collect information about trained models for the dashboard."""
+    """Collect information about trained models for the dashboard.
+
+    Scans full/, quick/, and legacy top-level directories.
+    Reports archived model count for drift analysis.
+    """
     last_retrain: str | None = None
     marker = _MODEL_DIR / ".last_retrain"
     if marker.exists():
         last_retrain = marker.read_text().strip()
 
     models_found: list[dict[str, Any]] = []
-    if _MODEL_DIR.exists():
-        for d in sorted(_MODEL_DIR.iterdir()):
-            if d.is_dir() and (d / "model.joblib").exists():
-                meta_path = d / "metadata.json"
-                meta: dict[str, Any] = {}
-                if meta_path.exists():
-                    try:
-                        meta = json.loads(meta_path.read_text())
-                    except Exception:
-                        pass
-                models_found.append(
-                    {
-                        "name": d.name,
-                        "model_type": meta.get("model_type", d.name.split("_")[0]),
-                        "version": meta.get("model_version", meta.get("version", "unknown")),
-                        "training_seasons": meta.get("training_seasons"),
-                        "trained_at": meta.get("trained_at"),
-                    }
-                )
+    models_found.extend(_scan_model_dir(_MODEL_DIR / "full", tier="full"))
+    models_found.extend(_scan_model_dir(_MODEL_DIR / "quick", tier="quick"))
+    models_found.extend(_scan_model_dir(_MODEL_DIR, tier="legacy"))
+
+    archive_count = 0
+    archive_dir = _MODEL_DIR / "archive"
+    if archive_dir.exists():
+        archive_count = sum(
+            1 for d in archive_dir.iterdir()
+            if d.is_dir() and (d / "model.joblib").exists()
+        )
 
     cv_summary: list[dict[str, Any]] = []
     for name in (
@@ -553,14 +602,17 @@ def gather_model_status() -> dict[str, Any]:
     latest_per_type: dict[str, dict[str, Any]] = {}
     for m in models_found:
         mt = m["model_type"]
-        if mt not in latest_per_type or m["name"] > latest_per_type[mt]["name"]:
-            latest_per_type[mt] = m
+        tier = m.get("training_tier", "legacy")
+        key = f"{mt}_{tier}"
+        if key not in latest_per_type or m["name"] > latest_per_type[key]["name"]:
+            latest_per_type[key] = m
 
     return {
         "last_retrain": last_retrain,
         "models_found": models_found,
         "production_models": list(latest_per_type.values()),
         "total_artifacts": len(models_found),
+        "archived_artifacts": archive_count,
         "cv_summary": cv_summary,
     }
 

@@ -29,6 +29,8 @@ from mlb_predict.app.admin import (
     gather_data_status,
     gather_model_status,
     get_state,
+    has_processed_data,
+    has_trained_models,
     run_pipeline,
     ws_repl_run,
     ws_shell_run,
@@ -86,14 +88,36 @@ def _grpc_dict(msg) -> dict:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Startup: load data, start gRPC server, create stubs. Shutdown: stop gRPC."""
+    """Startup: load data, start gRPC server, create stubs. Shutdown: stop gRPC.
+
+    Implements 4-way startup logic:
+    - Data + Models → normal startup
+    - Data + No models → quick-train bootstrap (skip ingest)
+    - No data + Models → ingest only (preserve existing models)
+    - No data + No models → full bootstrap (ingest + quick-train)
+    """
     model_type = os.environ.get("MLB_PREDICT_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
     logger.info("Application startup: model_type=%s", model_type)
-    loaded = try_startup(model_type)
-    if loaded:
-        logger.info("Startup complete — serving on model '%s'", model_type)
+
+    data_exists = has_processed_data()
+    models_exist = has_trained_models()
+    logger.info("Startup check: data_exists=%s, models_exist=%s", data_exists, models_exist)
+
+    if data_exists and models_exist:
+        loaded = try_startup(model_type)
+        if loaded:
+            logger.info("Startup complete — serving on model '%s'", model_type)
+        else:
+            logger.warning("Data and models exist but startup failed — attempting quick train")
+            asyncio.create_task(_quick_train_bootstrap())
+    elif data_exists and not models_exist:
+        logger.info("Data available but no models — starting quick-train bootstrap")
+        asyncio.create_task(_quick_train_bootstrap())
+    elif not data_exists and models_exist:
+        logger.info("Models exist but no data — starting data ingest only")
+        asyncio.create_task(_data_ingest_only())
     else:
-        logger.info("Data not ready — server accepting requests; auto-bootstrap starting")
+        logger.info("No data and no models — starting full bootstrap (ingest + quick-train)")
         asyncio.create_task(_auto_bootstrap())
 
     app.state._grpc_stubs = None
@@ -205,40 +229,77 @@ def _reload_app() -> None:
     startup(model_type)
 
 
-async def _auto_bootstrap() -> None:
-    """Auto-trigger ingest + retrain when no data/model exists on first startup.
+def _populate_duckdb() -> None:
+    """Ingest all feature Parquet files into DuckDB after the pipeline completes."""
+    try:
+        from mlb_predict.storage.duckdb_store import get_store
 
+        store = get_store()
+        store.ingest_all_features()
+        logger.info("DuckDB store populated after ingest")
+    except Exception as exc:
+        logger.warning("DuckDB population failed (non-fatal): %s", exc)
+
+
+def _reload_after_pipeline() -> None:
+    """Refresh DuckDB store and reload the active model after a pipeline completes."""
+    _populate_duckdb()
+    model_type = os.environ.get("MLB_PREDICT_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
+    try:
+        startup(model_type)
+        logger.info("Pipeline reload complete — app is ready")
+    except RuntimeError as exc:
+        logger.error("Pipeline reload failed: %s", exc)
+
+
+async def _auto_bootstrap() -> None:
+    """Full bootstrap: ingest all data then quick-train models.
+
+    Triggered only when NO data AND NO models exist (fresh deployment).
     After features are built, populates the DuckDB store so subsequent
     startups are 10-50x faster.
     """
-    logger.info("No data/model found — auto-bootstrapping with ingest + retrain")
-
-    def _populate_duckdb() -> None:
-        """Ingest all feature Parquet files into DuckDB after the pipeline completes."""
-        try:
-            from mlb_predict.storage.duckdb_store import get_store
-
-            store = get_store()
-            store.ingest_all_features()
-            logger.info("DuckDB store populated after ingest")
-        except Exception as exc:
-            logger.warning("DuckDB population failed (non-fatal): %s", exc)
-
-    def _reload_after_retrain() -> None:
-        _populate_duckdb()
-        model_type = os.environ.get("MLB_PREDICT_MODEL_TYPE", _DEFAULT_MODEL_TYPE)
-        try:
-            startup(model_type)
-            logger.info("Auto-bootstrap complete — app is ready")
-        except RuntimeError as exc:
-            logger.error("Auto-bootstrap reload failed: %s", exc)
+    logger.info("Full bootstrap: ingesting all data then quick-training models")
 
     await run_pipeline(PipelineKind.INGEST)
     ingest_state = get_state(PipelineKind.INGEST)
     if ingest_state.status.value != "success":
-        logger.error("Auto-bootstrap ingest failed — retrain skipped")
+        logger.error("Bootstrap ingest failed — quick-train skipped")
         return
-    await run_pipeline(PipelineKind.RETRAIN, on_success=_reload_after_retrain, bootstrap=True)
+    await run_pipeline(
+        PipelineKind.RETRAIN,
+        on_success=_reload_after_pipeline,
+        bootstrap=True,
+        training_tier="quick",
+    )
+
+
+async def _quick_train_bootstrap() -> None:
+    """Quick-train models when data exists but no models are available.
+
+    Skips data ingestion entirely and produces usable models in minutes
+    using ``--skip-cv --no-stage1``.
+    """
+    logger.info("Quick-train bootstrap: data exists, training quick models only")
+
+    _populate_duckdb()
+    await run_pipeline(
+        PipelineKind.RETRAIN,
+        on_success=_reload_after_pipeline,
+        bootstrap=True,
+        training_tier="quick",
+    )
+
+
+async def _data_ingest_only() -> None:
+    """Ingest data when models exist but data is missing.
+
+    Preserves existing model artifacts. After ingest completes, reloads
+    the app with the existing models so they can score the new data.
+    """
+    logger.info("Data ingest only: models exist, ingesting data without retraining")
+
+    await run_pipeline(PipelineKind.INGEST, on_success=_reload_after_pipeline)
 
 
 # ---------------------------------------------------------------------------
@@ -1365,6 +1426,7 @@ class _RetrainOptionsRequest(BaseModel):
 
     skip_cv: bool = False
     skip_stage1: bool = False
+    training_tier: str = "full"
 
 
 @app.get("/api/active-model", response_model=None)
@@ -1536,18 +1598,28 @@ async def api_admin_update(body: _PipelineOptionsRequest | None = None) -> dict:
 
 @app.post("/api/admin/retrain")
 async def api_admin_retrain(body: _RetrainOptionsRequest | None = None) -> dict:
-    """Clear all model artifacts and retrain from scratch."""
+    """Archive existing models of the target tier and retrain."""
     blocker = conflicting_pipeline()
     if blocker is not None:
         return {
             "ok": False,
             "message": f"Cannot start retrain — {blocker.value} pipeline is running.",
         }
+    tier = body.training_tier if body else "full"
+    if tier not in ("quick", "full"):
+        return {"ok": False, "message": f"Invalid training tier: '{tier}'."}
     opts: PipelineOptions | None = None
     if body and (body.skip_cv or body.skip_stage1):
         opts = PipelineOptions(skip_cv=body.skip_cv, skip_stage1=body.skip_stage1)
-    asyncio.create_task(run_pipeline(PipelineKind.RETRAIN, on_success=_reload_app, opts=opts))
-    return {"ok": True, "message": "Retrain pipeline started."}
+    asyncio.create_task(
+        run_pipeline(
+            PipelineKind.RETRAIN,
+            on_success=_reload_app,
+            opts=opts,
+            training_tier=tier,
+        )
+    )
+    return {"ok": True, "message": f"Retrain pipeline started (tier={tier})."}
 
 
 # ---------------------------------------------------------------------------
