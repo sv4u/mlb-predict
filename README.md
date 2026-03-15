@@ -65,6 +65,30 @@ The stacked ensemble never sees raw features. Instead, it takes the **calibrated
 - **Training**: The meta-learner is fit on the same held-out calibration split used for Platt scaling, so base-model probabilities are out-of-sample relative to the meta-learner
 - **When to use**: Always — this is the default and achieves the best Brier score and calibration
 
+### Training tiers
+
+The system supports two training tiers, each producing distinct model artifacts:
+
+| Tier | Version tag | Directory | Training scope | When used |
+| --- | --- | --- | --- | --- |
+| **Quick** (`--tier quick`) | `v4q` | `data/models/quick/` | Skip HPO, skip CV, skip Stage 1 player model | Initial bootstrap (first cold-start), emergency model recovery |
+| **Full** (`--tier full`) | `v4` | `data/models/full/` | Complete pipeline with HPO, CV, and Stage 1 | Production retraining, daily scheduled retraining |
+
+At startup, the system prefers full models over quick, with legacy (pre-tier) models as final fallback. Users can switch between available tiers on the admin dashboard.
+
+When retraining, old model artifacts are **archived** (moved to `data/models/archive/`) rather than deleted, preserving them for drift analysis. Each archive entry is timestamped so multiple training runs can be compared.
+
+### 4-way startup logic
+
+On startup, the application checks for existing processed data and trained models, then takes the minimal action needed:
+
+| Data exists? | Models exist? | Action taken |
+| --- | --- | --- |
+| Yes | Yes | **Normal startup** — load models and serve immediately |
+| Yes | No | **Quick-train only** — train bootstrap models (v4q), skip data ingestion |
+| No | Yes | **Data ingest only** — ingest data, preserve existing models |
+| No | No | **Full bootstrap** — ingest all data, then quick-train models |
+
 ### Training techniques
 
 | Technique | What it does |
@@ -226,6 +250,18 @@ python scripts/train_model.py
 # Train a subset
 python scripts/train_model.py --models logistic xgboost stacked
 ```
+
+#### Training tiers
+
+```bash
+# Full training (default) — complete pipeline with HPO, CV, Stage 1
+python scripts/train_model.py --tier full
+
+# Quick training — fast bootstrap, skips HPO/CV/Stage 1
+python scripts/train_model.py --tier quick
+```
+
+Quick tier automatically sets `--skip-cv`, `--no-stage1`, and disables HPO. Models are saved with a `v4q` version tag under `data/models/quick/`, keeping them separate from full-pipeline models in `data/models/full/`.
 
 ### Launch the web dashboard
 
@@ -480,12 +516,20 @@ Without a key, the app runs normally; odds features are simply unavailable. See 
 
 ### Force a full re-bootstrap
 
-Deleting the model artifacts directory causes the entrypoint to re-run the complete pipeline on the next start:
+Deleting the model artifacts directory causes the entrypoint to re-run the complete pipeline on the next start. The 4-way startup logic determines the minimal action needed:
 
 ```bash
 docker compose down
 rm -rf data/models/          # remove all trained model artifacts
-docker compose up -d         # triggers full re-ingest + re-train
+docker compose up -d         # triggers quick-train (data preserved) or full bootstrap (no data)
+```
+
+To force a complete re-bootstrap from scratch (ingest + train):
+
+```bash
+docker compose down
+rm -rf data/models/ data/processed/    # remove both models and processed data
+docker compose up -d                   # triggers full bootstrap (ingest + quick-train)
 ```
 
 ### Scheduled jobs (inside the container)
@@ -602,9 +646,12 @@ MLB Stats API     Retrosheet gamelogs   FanGraphs      Statcast (pybaseball)
                     │
                     ▼
                models/
-  logistic_v4_train2026/    lightgbm_v4_train2026/
-  xgboost_v4_train2026/     catboost_v4_train2026/
-  stacked_v4_train2026/     cv_summary_v4.json
+  quick/                        ←── bootstrap models (v4q, --tier quick)
+    logistic_v4q_train2026/     lightgbm_v4q_train2026/  ...
+  full/                         ←── production models (v4, --tier full)
+    logistic_v4_train2026/      lightgbm_v4_train2026/   ...
+  archive/                      ←── archived models (for drift analysis)
+    logistic_v4_train2025_20260315T.../  ...
 ```
 
 ---
@@ -627,7 +674,9 @@ MLB Stats API     Retrosheet gamelogs   FanGraphs      Statcast (pybaseball)
 | `data/processed/vegas/`            | `vegas_YYYY.parquet` (implied probabilities from money lines) |
 | `data/processed/weather/`          | `by_park_date.parquet` (historical temp, wind, humidity per game) |
 | `data/processed/features/`         | `features_YYYY.parquet` (136-feature matrix per season), `features_spring_YYYY.parquet` (spring training) |
-| `data/models/`                     | Trained model artifacts + HPO results + CV summaries       |
+| `data/models/quick/`               | Quick-trained (bootstrap) model artifacts (`v4q`)          |
+| `data/models/full/`                | Full-pipeline model artifacts (`v4`)                       |
+| `data/models/archive/`             | Archived model artifacts (timestamped, for drift analysis) |
 | `data/processed/predictions/`      | Immutable prediction snapshots (Parquet, by season)        |
 | `data/processed/drift/`            | Drift monitoring logs (`run_metrics_YYYY.parquet`, global) |
 | `logs/server.log`                  | Web server stdout/stderr                                   |
@@ -703,7 +752,7 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 - **CV accuracy chart** — out-of-sample accuracy trend across all 6 model types
 - **Models explained** — collapsible cards describing each model with live Brier/Accuracy from CV data
 - **Technical wiki** — comprehensive documentation of all models, baseball statistics, data sources, feature engineering, training pipeline, calibration, evaluation metrics, prediction snapshots, drift monitoring, error handling, and system architecture
-- **Admin dashboard** — three pipeline controls: "Update Season" (non-destructive current-year refresh), "Full Reingest" (clears all processed data and re-ingests every season from scratch), and "Retrain Models" (clears all model artifacts and retrains from scratch). Destructive actions require confirmation. All pipelines run async with real-time log streaming, status badges, trained model inventory, CV performance table, and data coverage stats. Pipelines auto-reload the server on completion.
+- **Admin dashboard** — three pipeline controls: "Update Season" (non-destructive current-year refresh), "Full Reingest" (clears all processed data and re-ingests every season from scratch), and "Retrain Models" (archives existing models of the target tier and retrains; supports quick and full tiers). Destructive actions require confirmation. All pipelines run async with real-time log streaming, status badges, tiered model inventory, CV performance table, and data coverage stats. Pipelines auto-reload the server on completion.
 - **EV Calculator** — expected value calculator for sports bets. Supports American, decimal, and fractional odds with real-time computation of EV, implied probability, edge, ROI, break-even probability, and Kelly criterion with adjustable fraction slider. Available as a standalone page (`/tools/ev-calculator`) and as an embedded widget on each game detail page with auto-populated model probabilities and home/away team toggle
 - **Sitemap** — complete index of all pages and API endpoints with descriptions; also available as XML (`/sitemap.xml`) for search engine crawlers
 
@@ -723,7 +772,7 @@ Start the dashboard with `python scripts/serve.py`, then open `http://localhost:
 | `GET /api/admin/status`                           | Full system status (data, models, pipelines)     |
 | `POST /api/admin/ingest`                          | Full re-ingestion: clear all data + re-ingest all seasons (async) |
 | `POST /api/admin/update`                          | Update current season only — non-destructive (async) |
-| `POST /api/admin/retrain`                         | Clear all models + retrain from scratch (async)  |
+| `POST /api/admin/retrain`                         | Archive models + retrain (async). Body: `{"training_tier": "quick"\|"full"}` |
 
 ---
 
@@ -817,6 +866,9 @@ mlb-predict/
 │   │   ├── predictions/
 │   │   └── drift/
 │   └── models/
+│       ├── quick/          # Bootstrap models (v4q)
+│       ├── full/           # Production models (v4)
+│       └── archive/        # Archived models (timestamped)
 ├── logs/
 │   ├── server.log          # Web server output
 │   ├── cron.log            # Daily cron output (host-based cron)
@@ -832,6 +884,16 @@ mlb-predict/
 ---
 
 ## Changelog
+
+### v4.1 — Tiered Training & Smart Startup
+
+- **4-way startup logic**: Application startup now independently checks for processed data and trained models, performing only the minimal action needed (normal startup, quick-train only, ingest only, or full bootstrap).
+- **Training tiers**: Two distinct tiers — `quick` (bootstrap, `v4q`) and `full` (production pipeline, `v4`) — each with separate storage directories (`data/models/quick/`, `data/models/full/`).
+- **Model archiving**: Old models are moved to `data/models/archive/` with timestamps instead of being deleted, enabling drift analysis across training runs.
+- **Tier-aware API**: `POST /api/admin/retrain` accepts `training_tier` parameter (`"quick"` or `"full"`) to control which tier is retrained.
+- **Model preference**: Full-tier models are preferred over quick, with legacy (pre-tier) as final fallback; users can switch between tiers on the dashboard.
+- **CLI `--tier` flag**: `scripts/train_model.py --tier quick|full` controls training scope.
+- **65 new tests**: Comprehensive test coverage for tier storage, archiving, 4-way startup logic, admin tier functions, and retrain API tier support.
 
 ### v4 — Two-Stage Player Model
 
