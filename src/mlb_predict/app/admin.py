@@ -355,20 +355,19 @@ def _retrain_commands(
 ) -> list[tuple[str, str]]:
     """Retrain all production models.
 
-    When *bootstrap* is True or *training_tier* is ``"quick"``, skips
-    expanding-window CV and Stage 1 player embeddings to produce usable
-    models in minutes instead of hours.
-    Options from *opts* (skip_cv, skip_stage1) override defaults for
-    manual dashboard-triggered retrains.
+    CV is always skipped for dashboard-triggered retrains because it is
+    evaluation-only (trains 5 models × 24 seasons) and exceeds the
+    container memory budget.  Use ``scripts/train_model.py`` directly
+    with explicit flags to run CV from the CLI.
+
+    When *bootstrap* is True or *training_tier* is ``"quick"``, also
+    skips Stage 1 player embeddings to produce usable models in minutes.
     """
     python = _python_bin()
     models = "logistic lightgbm xgboost catboost mlp stacked"
     effective_tier = "quick" if bootstrap else training_tier
-    flags = f" --tier {effective_tier}"
-    skip_cv = (effective_tier == "quick") or (opts.skip_cv if opts else False)
+    flags = f" --tier {effective_tier} --skip-cv"
     skip_stage1 = (effective_tier == "quick") or (opts.skip_stage1 if opts else False)
-    if skip_cv:
-        flags += " --skip-cv"
     if skip_stage1:
         flags += " --no-stage1"
     tier_label = "quick" if effective_tier == "quick" else "full"

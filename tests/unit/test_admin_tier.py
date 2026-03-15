@@ -138,20 +138,21 @@ class TestRetrainCommandsTier:
         assert "--tier quick" in cmd
         assert "--skip-cv" in cmd
 
-    def test_full_tier_no_skip_by_default(self) -> None:
-        """Full tier does not add --skip-cv or --no-stage1 by default."""
+    def test_full_tier_always_skips_cv(self) -> None:
+        """Full tier always skips CV (CV is evaluation-only, not for production)."""
         cmds = _retrain_commands(training_tier="full")
         _, cmd = cmds[0]
-        assert "--skip-cv" not in cmd
+        assert "--skip-cv" in cmd
         assert "--no-stage1" not in cmd
 
-    def test_opts_override_full_tier(self) -> None:
-        """PipelineOptions can add --skip-cv even in full tier."""
-        opts = PipelineOptions(skip_cv=True)
+    def test_full_tier_opts_can_skip_stage1(self) -> None:
+        """PipelineOptions can add --no-stage1 for full tier."""
+        opts = PipelineOptions(skip_stage1=True)
         cmds = _retrain_commands(opts, training_tier="full")
         _, cmd = cmds[0]
         assert "--tier full" in cmd
         assert "--skip-cv" in cmd
+        assert "--no-stage1" in cmd
 
     def test_command_includes_all_model_types(self) -> None:
         """Retrain command includes all 6 model types."""

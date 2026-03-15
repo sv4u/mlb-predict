@@ -947,26 +947,6 @@ def run_expanding_cv(
 
             y_prob = _predict_proba(cal, X_eval)
             er = evaluate(y_eval, y_prob)
-
-            _hp_defaults = {
-                "logistic": _LR_PARAMS,
-                "lightgbm": _LGB_PARAMS,
-                "xgboost": _XGB_PARAMS,
-                "catboost": _CATB_PARAMS,
-                "mlp": _MLP_PARAMS,
-            }
-            hp: dict[str, Any] = _model_params_only(params) or _hp_defaults.get(mt, {})
-            meta = ModelMetadata(
-                model_version=_FEATURE_VERSION,
-                model_type=mt,
-                training_seasons=train_seasons,
-                hyperparameters=hp,
-                feature_set_version=_FEATURE_VERSION,
-                feature_cols=feat_cols,
-                eval_brier=float(er.brier_score),
-                train_n_games=len(X_fit),
-            )
-            save_model(cal, meta, model_dir=model_dir)
             results[mt].append(_result_row(mt, eval_season, len(X_train), er))
 
         # Stacked ensemble: train meta-learner on X_meta (unseen by calibrators)
@@ -1003,6 +983,11 @@ def run_expanding_cv(
             if results[mt]
         )
         print(f"  {eval_season}: n_train={len(X_train):,} | {status}", flush=True)
+
+        del fitted_models, train_df, X_train, y_train, w_train
+        del X_fit, y_fit, w_fit, X_cal_full, y_cal_full, X_cal, y_cal, X_meta, y_meta
+        del eval_clean, X_eval, y_eval
+        gc.collect()
 
     return results
 

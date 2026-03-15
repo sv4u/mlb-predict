@@ -153,8 +153,6 @@ def main() -> None:
         args.hpo = False
     args.model_dir.mkdir(parents=True, exist_ok=True)
 
-    season_dfs = _load_all_feature_files(args.features_dir)
-
     current_year = datetime.now(timezone.utc).year
     expected_seasons = list(range(2000, current_year + 1))
     processed_dir = args.features_dir.parent
@@ -184,11 +182,12 @@ def main() -> None:
     # Optional Optuna HPO
     # -------------------------------------------------------------------------
     if args.hpo:
+        hpo_season_dfs = _load_all_feature_files(args.features_dir)
         tree_models = [m for m in args.models if m in ("lightgbm", "xgboost")]
         for mt in tree_models:
             print(f"\nRunning Optuna HPO for {mt} ({args.hpo_trials} trials)…")
             best = run_optuna_hpo(
-                season_dfs,
+                hpo_season_dfs,
                 model_type=mt,
                 n_trials=args.hpo_trials,
                 model_dir=args.model_dir,
@@ -199,6 +198,7 @@ def main() -> None:
                 lgb_params = best
             else:
                 xgb_params = best
+        del hpo_season_dfs
 
     # -------------------------------------------------------------------------
     # Expanding-window CV
