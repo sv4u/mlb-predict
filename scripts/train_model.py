@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from mlb_predict.model.artifacts import TrainingTier
 from mlb_predict.model.train import (
     _load_all_feature_files,
     run_expanding_cv,
@@ -135,8 +136,18 @@ def main() -> None:
         action="store_true",
         help="Fast mode: skip CV, skip Stage 1, skip HPO (equivalent to --skip-cv --no-stage1)",
     )
+    ap.add_argument(
+        "--tier",
+        choices=["quick", "full"],
+        default="full",
+        help="Training tier: 'quick' (bootstrap, v4q) or 'full' (complete pipeline, v4)",
+    )
     args = ap.parse_args()
     if args.fast:
+        args.skip_cv = True
+        args.no_stage1 = True
+        args.hpo = False
+    if args.tier == "quick":
         args.skip_cv = True
         args.no_stage1 = True
         args.hpo = False
@@ -245,7 +256,8 @@ def main() -> None:
     # -------------------------------------------------------------------------
     # Production models
     # -------------------------------------------------------------------------
-    print("\nTraining production models on all available seasons…")
+    tier = TrainingTier(args.tier)
+    print(f"\nTraining {tier.value} production models on all available seasons…")
     train_production_model(
         args.features_dir,
         args.model_dir,
@@ -260,6 +272,7 @@ def main() -> None:
         gamelogs_dir=args.gamelogs_dir,
         player_data_dir=args.player_data_dir,
         enable_stage1=enable_stage1,
+        training_tier=tier,
     )
 
     if args.feature_importance:

@@ -44,7 +44,13 @@ import xgboost as xgb
 from catboost import CatBoostClassifier
 
 from mlb_predict.features.builder import FEATURE_COLS
-from mlb_predict.model.artifacts import ModelMetadata, load_model, save_model
+from mlb_predict.model.artifacts import (
+    ModelMetadata,
+    TrainingTier,
+    TIER_VERSION_TAG,
+    load_model,
+    save_model,
+)
 from mlb_predict.model.evaluate import evaluate, EvalResult
 from mlb_predict.player.embeddings import STAGE1_FEATURE_NAMES
 
@@ -1034,11 +1040,15 @@ def train_production_model(
     gamelogs_dir: Path = Path("data/processed/retrosheet"),
     player_data_dir: Path = Path("data/processed/player"),
     enable_stage1: bool = True,
+    training_tier: TrainingTier = TrainingTier.FULL,
 ) -> dict[str, Any]:
     """Train calibrated production models on all available seasons.
 
     When *enable_stage1* is True, trains the Stage 1 player embedding model
     on all seasons and saves the model alongside Stage 2 artifacts.
+
+    *training_tier* controls where artifacts are saved and the version tag
+    embedded in metadata (``v4`` for full, ``v4q`` for quick).
     """
     model_types = model_types or ["logistic", "lightgbm", "xgboost", "catboost", "mlp", "stacked"]
     decay = time_decay if time_decay is not None else _TIME_DECAY
@@ -1108,11 +1118,14 @@ def train_production_model(
         except Exception as exc:
             logger.warning("Stage 1 production training failed: %s; proceeding without", exc)
             gc.collect()
+    version_tag = TIER_VERSION_TAG[training_tier]
+
     feat_cols = _available_features(season_frames)
     logger.info(
-        "Production training using %d features (of %d FEATURE_COLS)",
+        "Production training using %d features (of %d FEATURE_COLS), tier=%s",
         len(feat_cols),
         len(FEATURE_COLS),
+        training_tier.value,
     )
 
     all_data = pd.concat(season_frames.values(), ignore_index=True)
@@ -1164,7 +1177,7 @@ def train_production_model(
         }
         hp: dict[str, Any] = _model_params_only(params) or _hp_defaults.get(mt, {})
         meta = ModelMetadata(
-            model_version=_FEATURE_VERSION,
+            model_version=version_tag,
             model_type=mt,
             training_seasons=seasons,
             hyperparameters=hp,
@@ -1173,16 +1186,20 @@ def train_production_model(
             eval_brier=float(er_fit.brier_score),
             train_n_games=len(X_fit),
         )
-        save_model(cal, meta, model_dir=model_dir)
+        save_model(cal, meta, model_dir=model_dir, training_tier=training_tier)
         trained[mt] = cal
-        print(f"  {mt} production model saved", flush=True)
+        print(f"  {mt} {training_tier.value} model saved", flush=True)
 
     if "stacked" in model_types:
-        from mlb_predict.model.artifacts import latest_artifact as _latest
+        from mlb_predict.model.artifacts import latest_artifact as _latest, latest_artifact_best_tier
 
         for _bk in ["logistic", "lightgbm", "xgboost", "catboost", "mlp"]:
             if _bk not in base_models:
-                _art = _latest(_bk, model_dir=model_dir, version=_FEATURE_VERSION)
+                _art = _latest(
+                    _bk, model_dir=model_dir, version=version_tag, tier=training_tier,
+                )
+                if _art is None:
+                    _art, _ = latest_artifact_best_tier(_bk, model_dir=model_dir)
                 if _art is not None:
                     base_models[_bk], _ = load_model(_art)
                     print(f"  loaded existing {_bk} artifact for stacking")
@@ -1203,7 +1220,7 @@ def train_production_model(
         y_prob_stack = ensemble.predict_proba(X_fit)[:, 1]
         er_stack = evaluate(y_fit, y_prob_stack)
         meta = ModelMetadata(
-            model_version=_FEATURE_VERSION,
+            model_version=version_tag,
             model_type="stacked",
             training_seasons=seasons,
             hyperparameters={"meta": _META_PARAMS},
@@ -1212,8 +1229,8 @@ def train_production_model(
             eval_brier=float(er_stack.brier_score),
             train_n_games=len(X_fit),
         )
-        save_model(ensemble, meta, model_dir=model_dir)
+        save_model(ensemble, meta, model_dir=model_dir, training_tier=training_tier)
         trained["stacked"] = ensemble
-        print("  stacked production model saved", flush=True)
+        print(f"  stacked {training_tier.value} model saved", flush=True)
 
     return trained
