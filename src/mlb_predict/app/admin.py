@@ -355,21 +355,21 @@ def _retrain_commands(
 ) -> list[tuple[str, str]]:
     """Retrain all production models.
 
-    CV is always skipped for dashboard-triggered retrains because it is
-    evaluation-only (trains 5 models × 24 seasons) and exceeds the
-    container memory budget.  Use ``scripts/train_model.py`` directly
-    with explicit flags to run CV from the CLI.
+    CV and Stage 1 are always skipped for dashboard-triggered retrains:
 
-    When *bootstrap* is True or *training_tier* is ``"quick"``, also
-    skips Stage 1 player embeddings to produce usable models in minutes.
+    - **CV** is evaluation-only (trains 5 models × 24 seasons) and
+      exceeds the container memory budget.
+    - **Stage 1** player embeddings require PyTorch, which may use CPU
+      instructions (AVX2/AVX-512) unavailable on NAS or embedded
+      hardware, causing SIGILL crashes.
+
+    Use ``scripts/train_model.py`` directly with explicit flags to
+    enable CV or Stage 1 from the CLI on compatible hardware.
     """
     python = _python_bin()
     models = "logistic lightgbm xgboost catboost mlp stacked"
     effective_tier = "quick" if bootstrap else training_tier
-    flags = f" --tier {effective_tier} --skip-cv"
-    skip_stage1 = (effective_tier == "quick") or (opts.skip_stage1 if opts else False)
-    if skip_stage1:
-        flags += " --no-stage1"
+    flags = f" --tier {effective_tier} --skip-cv --no-stage1"
     tier_label = "quick" if effective_tier == "quick" else "full"
     return [
         (

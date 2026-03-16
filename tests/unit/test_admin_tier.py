@@ -12,7 +12,6 @@ from unittest.mock import patch
 
 from mlb_predict.app.admin import (
     PipelineKind,
-    PipelineOptions,
     PipelineState,
     _retrain_commands,
     has_processed_data,
@@ -138,19 +137,10 @@ class TestRetrainCommandsTier:
         assert "--tier quick" in cmd
         assert "--skip-cv" in cmd
 
-    def test_full_tier_always_skips_cv(self) -> None:
-        """Full tier always skips CV (CV is evaluation-only, not for production)."""
+    def test_full_tier_always_skips_cv_and_stage1(self) -> None:
+        """Full tier always skips CV and Stage 1 for dashboard safety."""
         cmds = _retrain_commands(training_tier="full")
         _, cmd = cmds[0]
-        assert "--skip-cv" in cmd
-        assert "--no-stage1" not in cmd
-
-    def test_full_tier_opts_can_skip_stage1(self) -> None:
-        """PipelineOptions can add --no-stage1 for full tier."""
-        opts = PipelineOptions(skip_stage1=True)
-        cmds = _retrain_commands(opts, training_tier="full")
-        _, cmd = cmds[0]
-        assert "--tier full" in cmd
         assert "--skip-cv" in cmd
         assert "--no-stage1" in cmd
 
