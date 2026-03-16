@@ -72,7 +72,7 @@ The system supports two training tiers, each producing distinct model artifacts:
 | Tier | Version tag | Directory | Training scope | When used |
 | --- | --- | --- | --- | --- |
 | **Quick** (`--tier quick`) | `v4q` | `data/models/quick/` | Skip HPO, skip CV, skip Stage 1 player model | Initial bootstrap (first cold-start), emergency model recovery |
-| **Full** (`--tier full`) | `v4` | `data/models/full/` | Complete pipeline with HPO, CV, and Stage 1 | Production retraining, daily scheduled retraining |
+| **Full** (`--tier full`) | `v4` | `data/models/full/` | Complete pipeline with Stage 1 (CV skipped for dashboard retrains to fit in container memory) | Production retraining, daily scheduled retraining |
 
 At startup, the system prefers full models over quick, with legacy (pre-tier) models as final fallback. Users can switch between available tiers on the admin dashboard.
 
@@ -491,6 +491,7 @@ docker compose up -d                 # start again
 | `MEM_LIMIT` | `1536m` | Container memory limit (use `2g` for training/bootstrap) |
 | `CPUS`   | `2`      | Container CPU limit |
 | `MLB_PREDICT_LIVE_API` | `1` | Set to `0` to disable live MLB Stats API and Odds API calls at runtime (minimize network) |
+| `TORCH_SOURCE` | `0` | Build arg: set to `1` to compile PyTorch from source for SSE4.2 CPUs (see [PyTorch source build](#pytorch-source-build-torch_source1)) |
 
 ```bash
 # Serve on port 9000 with the XGBoost model
@@ -604,6 +605,8 @@ The `Dockerfile` uses a multi-stage build:
 
 | Stage | Built by | Platforms | Contents |
 |---|---|---|---|
+| `pytorch-builder` | CI (when `TORCH_SOURCE=1`) | amd64 | PyTorch compiled from source for SSE4.2 CPUs |
+| `gitlog` | both | all | Git commit history extraction |
 | `base` | both | amd64 + arm64 | System deps, supercronic (arch-aware), editable Python package |
 | `test` | CI only | amd64 only | `base` + dev deps (`ruff`, `mypy`, `pytest`) + `tests/` |
 | `production` | CI + local | amd64 + arm64 | `base` + `scripts/`, `docker/` helpers, entrypoint |
@@ -616,6 +619,30 @@ To build only the test stage locally:
 docker build --target test -t mlb-predict:test .
 docker run --rm --entrypoint python mlb-predict:test -m pytest tests/ -v
 ```
+
+### PyTorch source build (`TORCH_SOURCE=1`)
+
+Pre-built PyTorch wheels from `download.pytorch.org/whl/cpu` are compiled with AVX2 instructions. CPUs that lack AVX2 (e.g. Intel Celeron J4125 in TrueNAS devices) crash with `SIGILL` (Illegal Instruction) when running Stage 1 player embeddings.
+
+Setting `TORCH_SOURCE=1` compiles PyTorch from source inside the `pytorch-builder` Docker stage, targeting only SSE4.2 instructions. This produces a wheel that runs on **all** x86-64 CPUs.
+
+```bash
+# Build locally with source-compiled PyTorch (slow first time, ~30-90 min)
+TORCH_SOURCE=1 docker compose up --build
+
+# Or build the image directly
+docker build --build-arg TORCH_SOURCE=1 -t mlb-predict:sse42 .
+```
+
+| Build arg | Default | Description |
+|---|---|---|
+| `TORCH_SOURCE` | `0` | `1` = build PyTorch from source for SSE4.2; `0` = use pre-built wheels |
+| `PYTORCH_VERSION` | `2.6.0` | PyTorch version tag to build (only used when `TORCH_SOURCE=1`) |
+| `PYTORCH_BUILD_JOBS` | `2` | Max parallel compilation jobs (lower = less RAM; raise on CI runners) |
+
+**CI behavior**: The GitHub Actions workflow automatically sets `TORCH_SOURCE=1` for non-PR builds (pushes to `main` and version tags). The `pytorch-builder` layer is cached by GHA cache, so only the first build (or `PYTORCH_VERSION` bumps) pays the full compile cost. PR builds use pre-built wheels for fast validation.
+
+**NAS deployment**: Pull the CI-built image from GHCR via `docker-compose.image.yml` — no local source build needed.
 
 ---
 
@@ -884,6 +911,14 @@ mlb-predict/
 ---
 
 ## Changelog
+
+### v4.2 — PyTorch Source Build for NAS Hardware
+
+- **PyTorch source build**: New `TORCH_SOURCE=1` Docker build arg compiles PyTorch from source targeting SSE4.2, enabling Stage 1 player embeddings on CPUs without AVX2 (e.g. Intel Celeron J4125 in TrueNAS).
+- **Build flags**: Disables MKL-DNN, FBGEMM, and all CUDA/distributed features; uses Eigen BLAS and `-march=nehalem` for maximum x86-64 compatibility.
+- **CI integration**: Non-PR builds automatically use `TORCH_SOURCE=1`; the `pytorch-builder` layer is cached by GHA cache so only the first build is slow.
+- **Full-tier Stage 1 re-enabled**: Dashboard full-tier retrains now include Stage 1 player embeddings (previously skipped due to SIGILL on non-AVX CPUs). Quick-tier continues to skip Stage 1.
+- **Configurable build args**: `PYTORCH_VERSION` (default `2.6.0`) and `PYTORCH_BUILD_JOBS` (default `2`) allow version and parallelism control.
 
 ### v4.1 — Tiered Training & Smart Startup
 
