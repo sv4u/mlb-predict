@@ -33,6 +33,7 @@ services:
       dockerfile: Dockerfile
       args:
         GIT_COMMIT: "${GIT_COMMIT:-unknown}"
+        TORCH_SOURCE: "${TORCH_SOURCE:-0}"
     image: mlb-predict:latest
     container_name: mlb-predict
     ports:
