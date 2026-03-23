@@ -11,6 +11,9 @@
 # Environment overrides (prefix with `MODEL=xgboost docker compose up`)
 #   MODEL               — model type: logistic | lightgbm | xgboost | catboost | mlp | stacked (default: stacked)
 #   PORT                — host port to expose the dashboard on (default: 30087)
+#   LAN access          — publishes on 0.0.0.0 so other devices (e.g. http://192.168.x.x:30087/)
+#                         can reach the host. If unreachable, check macOS Firewall (allow Docker/incoming)
+#                         and Docker Desktop → Settings that allow the VM to accept LAN connections.
 #   MEM_LIMIT           — container memory limit (default: 2560m). Reduce to 1536m after bootstrap if memory is tight.
 #   CPUS                — container CPU limit (default: 2)
 #   MLB_PREDICT_LIVE_API — set to 0 to disable live MLB/Odds API calls at runtime (minimize network; see README)
@@ -37,20 +40,24 @@ services:
     image: mlb-predict:latest
     container_name: mlb-predict
     ports:
-      - "${PORT:-30087}:30087"
+      # Bind on all host interfaces (LAN + localhost), not only loopback
+      - "0.0.0.0:${PORT:-30087}:30087"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
     environment:
-      GIT_COMMIT: "${GIT_COMMIT:-unknown}"
+      # GIT_COMMIT is omitted here so the baked /app/GIT_COMMIT from the image is used.
+      # To override: `GIT_COMMIT=abc1234 docker compose up` (pass-through not listed;
+      # add `GIT_COMMIT: ${GIT_COMMIT}` if you need it in compose).
       MODEL: "${MODEL:-stacked}"
       PORT: "30087"
+      # Belt-and-suspenders with serve.py defaults (supervisord already passes --host 0.0.0.0)
+      MLB_PREDICT_LISTEN_ALL: "1"
       MLB_PREDICT_VERBOSE: true
       MLB_PREDICT_LOG_LEVEL: "DEBUG"
       MLB_PREDICT_LOG_FORMAT: "human"
       # Set to "0" to disable live MLB Stats API and Odds API calls (minimize network footprint)
       MLB_PREDICT_LIVE_API: "${MLB_PREDICT_LIVE_API:-1}"
-    restart: unless-stopped
     mem_limit: ${MEM_LIMIT:-2560m}
     cpus: ${CPUS:-2}
     deploy:

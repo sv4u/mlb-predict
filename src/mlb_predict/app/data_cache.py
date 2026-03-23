@@ -31,7 +31,6 @@ _features: pd.DataFrame | None = None
 _model: object | None = None
 _meta: object | None = None
 _feature_cols: list[str] = []
-_git_commit: str = "unknown"
 _active_model_type: str = "stacked"
 _app_ready: bool = False
 
@@ -59,6 +58,11 @@ def _resolve_git_commit() -> str:
     except Exception:
         pass
     return "unknown"
+
+
+# Resolve once at import so UI (e.g. initializing.html) shows the baked/git hash
+# even when try_startup() has not run yet (cold bootstrap path).
+_git_commit: str = _resolve_git_commit()
 
 
 def get_git_commit() -> str:

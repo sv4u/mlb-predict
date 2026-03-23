@@ -1249,8 +1249,9 @@ def _ctx(request: Request, **extra: object) -> dict:
 def _init_page(request: Request) -> HTMLResponse:
     """Return the initialization progress page."""
     return templates.TemplateResponse(
+        request,
         "initializing.html",
-        {"request": request, "git_commit": get_git_commit()},
+        {"git_commit": get_git_commit()},
     )
 
 
@@ -1258,14 +1259,14 @@ def _init_page(request: Request) -> HTMLResponse:
 async def page_home(request: Request):
     if not is_ready():
         return _init_page(request)
-    return templates.TemplateResponse("index.html", _ctx(request))
+    return templates.TemplateResponse(request, "index.html", _ctx(request))
 
 
 @app.get("/game/{game_pk}", response_class=HTMLResponse)
 async def page_game(request: Request, game_pk: int):
     if not is_ready():
         return _init_page(request)
-    return templates.TemplateResponse("game.html", _ctx(request, game_pk=game_pk))
+    return templates.TemplateResponse(request, "game.html", _ctx(request, game_pk=game_pk))
 
 
 @app.get("/season/2026", response_class=HTMLResponse)
@@ -1278,6 +1279,7 @@ async def page_season_2026(request: Request):
     total = len(season_df)
     first_date = str(season_df["date"].min())[:10] if total else "—"
     return templates.TemplateResponse(
+        request,
         "season_2026.html",
         _ctx(request, total_games=total, first_date=first_date),
     )
@@ -1310,25 +1312,25 @@ async def page_standings(request: Request):
     """Full standings page: predicted vs actual, all divisions + league leaders."""
     if not is_ready():
         return _init_page(request)
-    return templates.TemplateResponse("standings.html", _ctx(request))
+    return templates.TemplateResponse(request, "standings.html", _ctx(request))
 
 
 @app.get("/leaders", response_class=HTMLResponse)
 async def page_leaders(request: Request):
     """League leaders page: top players by hitting/pitching categories (MLB Stats API)."""
-    return templates.TemplateResponse("leaders.html", _ctx(request))
+    return templates.TemplateResponse(request, "leaders.html", _ctx(request))
 
 
 @app.get("/players", response_class=HTMLResponse)
 async def page_players(request: Request):
     """Player stats page: full batting/pitching tables by season (MLB Stats API)."""
-    return templates.TemplateResponse("players.html", _ctx(request))
+    return templates.TemplateResponse(request, "players.html", _ctx(request))
 
 
 @app.get("/sitemap", response_class=HTMLResponse)
 async def page_sitemap(request: Request):
     """Sitemap page listing all routes in the application."""
-    return templates.TemplateResponse("sitemap.html", _ctx(request))
+    return templates.TemplateResponse(request, "sitemap.html", _ctx(request))
 
 
 @app.get("/sitemap.xml", response_class=Response)
@@ -1362,6 +1364,7 @@ async def page_wiki(request: Request):
     if not is_ready():
         return _init_page(request)
     return templates.TemplateResponse(
+        request,
         "wiki.html",
         _ctx(request, changelog=get_changelog()),
     )
@@ -1370,7 +1373,7 @@ async def page_wiki(request: Request):
 @app.get("/odds", response_class=HTMLResponse)
 async def page_odds_hub(request: Request):
     """Odds hub: EV+ opportunities, all odds board, and EV calculator."""
-    return templates.TemplateResponse("odds_hub.html", _ctx(request))
+    return templates.TemplateResponse(request, "odds_hub.html", _ctx(request))
 
 
 @app.get("/tools/ev-calculator", response_class=HTMLResponse)
@@ -1384,7 +1387,7 @@ async def page_ev_calculator(request: Request):
 @app.get("/dashboard", response_class=HTMLResponse)
 async def page_dashboard(request: Request):
     """Admin dashboard with retrain/ingest controls and system status."""
-    return templates.TemplateResponse("dashboard.html", _ctx(request))
+    return templates.TemplateResponse(request, "dashboard.html", _ctx(request))
 
 
 # ---------------------------------------------------------------------------
