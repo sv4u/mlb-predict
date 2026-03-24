@@ -236,8 +236,8 @@
 
 <div class="boot-container">
   <div class="boot-card" id="boot-card">
-    <div class="boot-title">System Initializing</div>
-    <div class="boot-sub">
+    <div class="boot-title" id="boot-title" data-default="System Initializing">System Initializing</div>
+    <div class="boot-sub" id="boot-sub" data-default="The prediction system is setting up for first use. Data ingestion and model training run automatically. This page updates in real time and will redirect when everything is ready.">
       The prediction system is setting up for first use. Data ingestion and model training
       run automatically. This page updates in real time and will redirect when everything is ready.
     </div>
@@ -361,6 +361,27 @@ async function poll() {
       return;
     }
 
+    var modelLoad = d.model_load_pending === true || d.current_phase === 'model_load';
+    if (modelLoad) {
+      var bt = document.getElementById('boot-title');
+      var bs = document.getElementById('boot-sub');
+      if (bt) bt.textContent = 'Loading model & predictions';
+      if (bs) bs.textContent = d.status_message || 'Loading the trained model; this may take several minutes.';
+      document.getElementById('progress-section').style.display = 'none';
+      document.getElementById('log-section').style.display = 'none';
+      document.getElementById('error-container').innerHTML = '';
+      document.getElementById('phases-container').innerHTML =
+        '<div class="waiting-state" id="waiting-state"><div class="spinner"></div><p style="max-width:38rem;margin:0.75rem auto 0;line-height:1.5;">' +
+        (d.status_message || '') + '</p></div>';
+      setTimeout(poll, pollInterval);
+      return;
+    }
+
+    var btReset = document.getElementById('boot-title');
+    var bsReset = document.getElementById('boot-sub');
+    if (btReset && btReset.dataset.default) btReset.textContent = btReset.dataset.default;
+    if (bsReset && bsReset.dataset.default) bsReset.textContent = bsReset.dataset.default;
+
     var hasFailed = d.failed;
     if (hasFailed) {
       document.getElementById('boot-card').className = 'boot-card error';
@@ -376,7 +397,6 @@ async function poll() {
 
     var showProgress = d.total_steps > 0;
     document.getElementById('progress-section').style.display = showProgress ? '' : 'none';
-    document.getElementById('waiting-state').style.display = showProgress ? 'none' : '';
 
     if (showProgress) {
       document.getElementById('progress-pct').textContent = d.progress_pct + '%';
@@ -393,7 +413,15 @@ async function poll() {
       var phases = d.phases || {};
       var phasesHtml = renderPhase('ingest', 'Phase 1: Data Ingestion', phases.ingest || {});
       phasesHtml += renderPhase('retrain', 'Phase 2: Model Training', phases.retrain || {});
+      phasesHtml +=
+        '<div class="waiting-state" id="waiting-state">' +
+        '<div class="spinner"></div><p>Waiting for bootstrap to begin…</p></div>';
       document.getElementById('phases-container').innerHTML = phasesHtml;
+    }
+
+    var waitingStateEl = document.getElementById('waiting-state');
+    if (waitingStateEl) {
+      waitingStateEl.style.display = showProgress ? 'none' : '';
     }
 
     var ingest = d.phases ? d.phases.ingest : {};

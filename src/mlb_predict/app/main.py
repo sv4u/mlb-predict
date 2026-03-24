@@ -86,12 +86,33 @@ def _grpc_dict(msg) -> dict:
     return MessageToDict(msg, preserving_proto_field_name=True, **defaults_kw)
 
 
+async def _defer_try_startup(model_type: str) -> None:
+    """Load features and model in a thread pool so Uvicorn can bind immediately.
+
+    Without this, ``try_startup`` runs synchronously inside lifespan before the
+    first ``yield``, so no TCP connections are accepted until the stacked model
+    and optional Stage-1 injection finish (often minutes) — browsers see
+    connection errors.  While loading, ``is_ready()`` is false and ``/`` serves
+    ``initializing.html``.
+    """
+    try:
+        loaded = await asyncio.to_thread(try_startup, model_type)
+    except Exception:
+        logger.exception("Background try_startup failed — app may stay in initializing state")
+        return
+    if loaded:
+        logger.info("Startup complete — serving on model '%s'", model_type)
+    else:
+        logger.warning("Data and models exist but startup failed — attempting quick train")
+        asyncio.create_task(_quick_train_bootstrap())
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     """Startup: load data, start gRPC server, create stubs. Shutdown: stop gRPC.
 
     Implements 4-way startup logic:
-    - Data + Models → normal startup
+    - Data + Models → normal startup (model load deferred so HTTP listens immediately)
     - Data + No models → quick-train bootstrap (skip ingest)
     - No data + Models → ingest only (preserve existing models)
     - No data + No models → full bootstrap (ingest + quick-train)
@@ -104,12 +125,7 @@ async def _lifespan(app: FastAPI):
     logger.info("Startup check: data_exists=%s, models_exist=%s", data_exists, models_exist)
 
     if data_exists and models_exist:
-        loaded = try_startup(model_type)
-        if loaded:
-            logger.info("Startup complete — serving on model '%s'", model_type)
-        else:
-            logger.warning("Data and models exist but startup failed — attempting quick train")
-            asyncio.create_task(_quick_train_bootstrap())
+        app.state._deferred_startup_task = asyncio.create_task(_defer_try_startup(model_type))
     elif data_exists and not models_exist:
         logger.info("Data available but no models — starting quick-train bootstrap")
         asyncio.create_task(_quick_train_bootstrap())
@@ -331,6 +347,11 @@ async def api_bootstrap_progress() -> dict:
 
     Accounts for both ingest and retrain even when retrain hasn't started yet,
     so the progress bar reflects the full bootstrap lifecycle.
+
+    When data and model artifacts already exist, the app may be loading the
+    stacked model and scoring games in a background thread (no ingest/train
+    pipeline). In that case we return ``current_phase: model_load`` so the UI
+    does not show a fake 0% ingest/train progress bar.
     """
     from mlb_predict.app.admin import _ingest_commands, _retrain_commands
 
@@ -339,6 +360,35 @@ async def api_bootstrap_progress() -> dict:
 
     ingest_steps = ingest.get("steps", [])
     retrain_steps = retrain.get("steps", [])
+
+    model_load_pending = (
+        not is_ready()
+        and has_processed_data()
+        and has_trained_models()
+        and ingest["status"] == "idle"
+        and retrain["status"] == "idle"
+    )
+
+    if model_load_pending:
+        return {
+            "ready": False,
+            "current_phase": "model_load",
+            "model_load_pending": True,
+            "status_message": (
+                "Loading the trained model into memory and scoring games. "
+                "With a full dataset and player embeddings this often takes several minutes."
+            ),
+            "progress_pct": None,
+            "completed_steps": 0,
+            "total_steps": 0,
+            "eta_seconds": None,
+            "failed": False,
+            "error": None,
+            "phases": {
+                "ingest": {**ingest, "steps": ingest_steps},
+                "retrain": {**retrain, "steps": retrain_steps},
+            },
+        }
 
     if not ingest_steps and ingest["status"] == "idle":
         ingest_steps = [

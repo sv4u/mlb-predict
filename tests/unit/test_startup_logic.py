@@ -9,6 +9,7 @@ Validates the correct bootstrap path is chosen based on data/model availability:
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -31,8 +32,8 @@ class TestStartupDecisionMatrix:
     """
 
     @pytest.mark.asyncio
-    async def test_data_and_models_exist_normal_startup(self) -> None:
-        """When both data and models exist, try_startup is called (no bootstrap)."""
+    async def test_data_and_models_defer_startup_to_background(self) -> None:
+        """When both exist, try_startup runs in a background task (HTTP can bind first)."""
         with (
             patch("mlb_predict.app.main.has_processed_data", return_value=True),
             patch("mlb_predict.app.main.has_trained_models", return_value=True),
@@ -40,12 +41,23 @@ class TestStartupDecisionMatrix:
             patch("mlb_predict.app.main._auto_bootstrap") as mock_bootstrap,
             patch("mlb_predict.app.main._quick_train_bootstrap") as mock_quick,
             patch("mlb_predict.app.main._data_ingest_only") as mock_ingest,
+            # Avoid real gRPC startup (it awaits the loop and can schedule
+            # _defer_try_startup before the context body runs). The lifespan
+            # ``yield`` can also race with the deferred task, so we never assert
+            # try_startup was not called inside ``async with``.
+            patch(
+                "mlb_predict.grpc.server.start_grpc_server",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             from mlb_predict.app.main import _lifespan, app
 
             async with _lifespan(app):
                 pass
 
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
             mock_startup.assert_called_once()
             mock_bootstrap.assert_not_called()
             mock_quick.assert_not_called()
